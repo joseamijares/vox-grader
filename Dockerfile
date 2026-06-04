@@ -2,20 +2,23 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps for psycopg2
+# Install system deps
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy requirements first (for layer caching)
+COPY requirements.txt /app/requirements.txt
+RUN cat /app/requirements.txt && pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy source
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-COPY railway.json .
+COPY src/ /app/src/
+COPY scripts/ /app/scripts/
+COPY railway.json /app/
 
 # Set Python path
 ENV PYTHONPATH=/app/src
 
+# Verify schedule is installed
+RUN python -c "import schedule; print('schedule version:', schedule.__version__)"
+
 # Run the grader service
-CMD ["python", "scripts/grader_service.py"]
+CMD ["python", "/app/scripts/grader_service.py"]

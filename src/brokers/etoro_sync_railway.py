@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 eToro Sync for Railway — Tries API first, falls back to local JSON
+Parses raw eToro API format.
 """
 
 import os
@@ -10,6 +11,7 @@ import uuid
 import urllib.request
 import urllib.error
 from datetime import datetime
+from collections import defaultdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sync.vox_postgres_sync import (
@@ -43,6 +45,65 @@ def etoro_request(endpoint: str) -> dict:
         raise Exception(f"HTTP Error {e.code}: {e.reason}")
 
 
+def parse_etoro_json(data: dict) -> list:
+    """Parse raw eToro JSON into position records."""
+    cp = data.get('clientPortfolio', {})
+    positions = cp.get('positions', [])
+    
+    # Aggregate by symbol
+    aggregated = defaultdict(lambda: {"shares": 0, "value": 0, "avg_cost": 0, "price": 0})
+    
+    for pos in positions:
+        symbol = pos.get('_instrumentSymbol', 'UNKNOWN')
+        if not symbol or symbol == 'UNKNOWN':
+            continue
+            
+        pnl = pos.get('unrealizedPnL', {})
+        exposure = pnl.get('exposureInAccountCurrency', 0)
+        close_rate = pnl.get('closeRate', 0)
+        
+        units = pos.get('units', 0)
+        open_rate = pos.get('openRate', 0)
+        initial = pos.get('initialAmountInDollars', 0)
+        is_buy = pos.get('isBuy', True)
+        
+        # Calculate shares
+        if units and units > 0:
+            shares = abs(units)
+        elif close_rate > 0:
+            shares = exposure / close_rate
+        else:
+            shares = 0
+            
+        # Calculate avg_cost
+        if initial > 0 and shares > 0:
+            avg_cost = initial / shares
+        elif open_rate > 0:
+            avg_cost = open_rate
+        else:
+            avg_cost = close_rate * 0.9 if close_rate > 0 else 0
+        
+        aggregated[symbol]["shares"] += shares if is_buy else -shares
+        aggregated[symbol]["value"] += exposure
+        aggregated[symbol]["avg_cost"] = avg_cost
+        aggregated[symbol]["price"] = close_rate
+    
+    # Build records
+    records = []
+    for symbol, data in aggregated.items():
+        shares = abs(data["shares"])
+        if shares > 0:
+            records.append({
+                'ticker': symbol,
+                'shares': shares,
+                'avg_cost': data['avg_cost'],
+                'live_price': data['price'],
+                'live_value': data['value']
+            })
+    
+    return records
+
+
 def sync_etoro_from_json():
     """Fallback: sync from local JSON file."""
     json_path = '/app/data/etoro_portfolio.json'
@@ -53,28 +114,27 @@ def sync_etoro_from_json():
     with open(json_path) as f:
         data = json.load(f)
     
-    positions = data.get('positions', [])
-    if not positions:
-        print("  ⚠️ No positions in eToro JSON")
+    records = parse_etoro_json(data)
+    if not records:
+        print("  ⚠️ No positions parsed from eToro JSON")
         return 0
     
     existing = {p['ticker']: p for p in get_positions()}
     watchlist = {w['ticker']: w for w in get_watchlist()}
     
-    print(f"  📊 eToro JSON: {len(positions)} positions")
+    print(f"  📊 eToro JSON: {len(records)} aggregated positions")
     
     count = 0
-    for pos in positions:
-        ticker = pos['ticker']
-        shares = pos.get('shares', 0)
-        live_price = pos.get('live_price', 0)
-        live_value = pos.get('live_value', 0)
-        avg_cost = pos.get('avg_cost', 0)
+    for rec in records:
+        ticker = rec['ticker']
+        shares = rec['shares']
+        live_price = rec['live_price']
+        live_value = rec['live_value']
+        avg_cost = rec['avg_cost']
         
         wl = watchlist.get(ticker, {})
-        
-        # Check if position exists with other brokers
         existing_pos = existing.get(ticker)
+        
         if existing_pos and 'eToro' not in (existing_pos.get('brokers') or []):
             # Merge with existing
             old_brokers = existing_pos.get('brokers', []) or []
@@ -121,16 +181,50 @@ def sync_etoro():
     try:
         print("📊 Fetching portfolio from eToro API...")
         portfolio = etoro_request("/trading/info/real/pnl")
-        cp = portfolio.get("clientPortfolio", {})
-        positions = cp.get("positions", [])
+        records = parse_etoro_json(portfolio)
         
-        print(f"  📊 eToro API: {len(positions)} positions")
+        print(f"  📊 eToro API: {len(records)} positions")
         
-        # Process API positions (simplified for now)
-        # ... would need full instrument mapping
+        # Process API positions
+        existing = {p['ticker']: p for p in get_positions()}
+        watchlist = {w['ticker']: w for w in get_watchlist()}
         
-        print("  ✅ eToro API sync complete")
-        return len(positions)
+        for rec in records:
+            ticker = rec['ticker']
+            wl = watchlist.get(ticker, {})
+            existing_pos = existing.get(ticker)
+            
+            if existing_pos and 'eToro' not in (existing_pos.get('brokers') or []):
+                old_brokers = existing_pos.get('brokers', []) or []
+                new_brokers = list(set(old_brokers + ['eToro']))
+                upsert_position({
+                    'ticker': ticker,
+                    'shares': (existing_pos.get('shares', 0) or 0) + rec['shares'],
+                    'avg_cost': rec['avg_cost'],
+                    'live_price': rec['live_price'],
+                    'live_value': (existing_pos.get('live_value', 0) or 0) + rec['live_value'],
+                    'grade': wl.get('grade', existing_pos.get('grade', 0)),
+                    'council': wl.get('council', existing_pos.get('council', 'N/A')),
+                    'brokers': new_brokers,
+                    'sector': wl.get('sector', existing_pos.get('sector', '')),
+                    'updated_at': datetime.now().isoformat()
+                })
+            else:
+                upsert_position({
+                    'ticker': ticker,
+                    'shares': rec['shares'],
+                    'avg_cost': rec['avg_cost'],
+                    'live_price': rec['live_price'],
+                    'live_value': rec['live_value'],
+                    'grade': wl.get('grade', 0),
+                    'council': wl.get('council', 'N/A'),
+                    'brokers': ['eToro'],
+                    'sector': wl.get('sector', ''),
+                    'updated_at': datetime.now().isoformat()
+                })
+        
+        print(f"  ✅ eToro API sync complete: {len(records)} positions")
+        return len(records)
         
     except Exception as e:
         print(f"  ⚠️ eToro API failed: {e}")

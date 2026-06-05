@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 VOX Grader Service — Runs inside Railway, connects to Railway Postgres
-Single source of truth for all VOX grading operations.
 """
 import os
 import sys
@@ -73,10 +72,12 @@ def sync_etoro():
     try:
         from brokers.etoro_sync_railway import sync_etoro as do_sync
         print(f"[{datetime.now(timezone.utc)}] Starting eToro sync...")
-        do_sync()
-        print(f"[{datetime.now(timezone.utc)}] eToro sync complete")
+        count = do_sync()
+        print(f"[{datetime.now(timezone.utc)}] eToro sync complete: {count} positions")
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}] eToro sync failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def sync_all_brokers():
@@ -84,8 +85,8 @@ def sync_all_brokers():
     try:
         from brokers.unified_sync import sync_all_brokers as do_sync
         print(f"[{datetime.now(timezone.utc)}] Starting unified broker sync...")
-        do_sync()
-        print(f"[{datetime.now(timezone.utc)}] Unified broker sync complete")
+        count = do_sync()
+        print(f"[{datetime.now(timezone.utc)}] Unified broker sync complete: {count} positions")
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}] Unified broker sync failed: {e}")
         import traceback
@@ -105,6 +106,7 @@ def daily_job():
 
 if __name__ == "__main__":
     print(f"[{datetime.now(timezone.utc)}] VOX Grader Service starting...")
+    print(f"[{datetime.now(timezone.utc)}] Data files: {os.listdir('/app/data') if os.path.exists('/app/data') else 'NO DATA DIR'}")
     
     # Schedule daily at 7:30 AM CT (13:30 UTC)
     schedule.every().day.at("13:30").do(daily_job)

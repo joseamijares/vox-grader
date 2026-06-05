@@ -5,7 +5,6 @@ Single source of truth for all VOX grading operations.
 """
 import os
 import sys
-import json
 import time
 import schedule
 from datetime import datetime, timezone
@@ -71,13 +70,15 @@ def auto_grade_all():
 
 def sync_etoro():
     """Sync eToro positions to Railway DB."""
-    from brokers.etoro_sync import sync_etoro as do_sync
+    from brokers.etoro_sync_railway import sync_etoro as do_sync
     print(f"[{datetime.now(timezone.utc)}] Starting eToro sync...")
     try:
         do_sync()
         print(f"[{datetime.now(timezone.utc)}] eToro sync complete")
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}] eToro sync failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def daily_job():

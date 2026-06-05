@@ -17,6 +17,18 @@ from contextlib import contextmanager
 
 def _get_conn_kwargs():
     """Build connection kwargs from env (Railway-style or local)."""
+    # Prefer individual env vars (Railway sets these reliably)
+    password = os.environ.get("PGPASSWORD", "")
+    if password:
+        return {
+            "host": os.environ.get("PGHOST", "postgres-flpd.railway.internal"),
+            "port": int(os.environ.get("PGPORT", "5432")),
+            "user": os.environ.get("PGUSER", "postgres"),
+            "password": password,
+            "dbname": os.environ.get("PGDATABASE", "railway"),
+            "sslmode": "require",
+        }
+    # Fallback to DATABASE_URL
     db_url = os.environ.get("DATABASE_URL", "")
     if db_url and db_url.startswith("postgresql://"):
         parsed = urllib.parse.urlparse(db_url)
@@ -28,15 +40,7 @@ def _get_conn_kwargs():
             "dbname": parsed.path.lstrip("/"),
             "sslmode": "require",
         }
-    # Fallback to individual Railway env vars
-    return {
-        "host": os.environ.get("PGHOST", "postgres-flpd.railway.internal"),
-        "port": int(os.environ.get("PGPORT", "5432")),
-        "user": os.environ.get("PGUSER", "postgres"),
-        "password": os.environ.get("PGPASSWORD", ""),
-        "dbname": os.environ.get("PGDATABASE", "railway"),
-        "sslmode": "require",
-    }
+    raise RuntimeError("No DB credentials found. Set PGPASSWORD or DATABASE_URL.")
 
 
 @contextmanager
@@ -106,6 +110,12 @@ def delete_positions_by_broker(broker_name: str):
             "DELETE FROM positions WHERE brokers @> to_jsonb(%s::text)",
             ([broker_name],)
         )
+
+
+def delete_position(ticker: str):
+    """Delete a position by ticker."""
+    with _get_cursor() as cur:
+        cur.execute("DELETE FROM positions WHERE ticker = %s", (ticker,))
 
 
 def update_position(ticker: str, fields: dict):

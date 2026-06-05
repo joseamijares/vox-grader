@@ -2,7 +2,8 @@
 """
 Unified Broker Sync for Railway
 Reads portfolio JSON files and syncs to Railway Postgres.
-Supports: eToro, GBM Main, GBM USA, IBKR, Schwab, Binance, Bitso
+MERGES with existing positions (does not overwrite eToro data).
+Supports: GBM Main, GBM USA, IBKR, Schwab, Binance, Bitso
 """
 
 import os
@@ -12,8 +13,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sync.vox_postgres_sync import (
-    get_positions, upsert_position, delete_positions_by_broker,
-    get_watchlist
+    get_positions, upsert_position, get_watchlist
 )
 
 # MXN to USD rate
@@ -36,6 +36,38 @@ def get_watchlist_grades():
         return {}
 
 
+def merge_position(ticker, new_data, existing):
+    """Merge new broker data with existing position."""
+    if not existing:
+        # No existing position, insert as new
+        upsert_position(new_data)
+        return True
+    
+    # Existing position found - merge brokers and values
+    old_brokers = existing.get('brokers', []) or []
+    new_brokers = new_data.get('brokers', [])
+    merged_brokers = list(set(old_brokers + new_brokers))
+    
+    # For values: if eToro exists, keep eToro's live values and add our value
+    # Otherwise use our values
+    if 'eToro' in old_brokers:
+        # eToro already has this position, just add broker tag and shares
+        merged = dict(existing)
+        merged['brokers'] = merged_brokers
+        # Add shares from this broker
+        merged['shares'] = (existing.get('shares', 0) or 0) + new_data.get('shares', 0)
+        merged['live_value'] = (existing.get('live_value', 0) or 0) + new_data.get('live_value', 0)
+        merged['updated_at'] = datetime.now().isoformat()
+        upsert_position(merged)
+    else:
+        # No eToro, use our values but merge brokers
+        merged = dict(new_data)
+        merged['brokers'] = merged_brokers
+        upsert_position(merged)
+    
+    return True
+
+
 def sync_gbm_main():
     """Sync GBM Main (MXN) portfolio."""
     data = load_json('/app/data/gbm_main_portfolio.json')
@@ -43,6 +75,7 @@ def sync_gbm_main():
         print("  ⚠️ GBM Main JSON not found")
         return 0
     
+    existing = {p['ticker']: p for p in get_positions()}
     watchlist = get_watchlist_grades()
     sic = data.get('sic_positions', [])
     national = data.get('national_positions', [])
@@ -64,7 +97,7 @@ def sync_gbm_main():
         
         wl = watchlist.get(ticker, {})
         
-        upsert_position({
+        new_data = {
             'ticker': ticker,
             'shares': qty,
             'avg_cost': avg_cost_usd,
@@ -75,7 +108,9 @@ def sync_gbm_main():
             'brokers': ['GBM Main'],
             'sector': wl.get('sector', ''),
             'updated_at': datetime.now().isoformat()
-        })
+        }
+        
+        merge_position(ticker, new_data, existing.get(ticker))
         count += 1
     
     print(f"  ✅ Synced {count} GBM Main positions")
@@ -89,6 +124,7 @@ def sync_gbm_usa():
         print("  ⚠️ GBM USA JSON not found")
         return 0
     
+    existing = {p['ticker']: p for p in get_positions()}
     watchlist = get_watchlist_grades()
     positions = data.get('positions', [])
     
@@ -99,7 +135,7 @@ def sync_gbm_usa():
         ticker = pos['ticker']
         wl = watchlist.get(ticker, {})
         
-        upsert_position({
+        new_data = {
             'ticker': ticker,
             'shares': pos.get('qty', 0),
             'avg_cost': pos.get('cost_avg_usd', 0),
@@ -110,7 +146,9 @@ def sync_gbm_usa():
             'brokers': ['GBM USA'],
             'sector': wl.get('sector', ''),
             'updated_at': datetime.now().isoformat()
-        })
+        }
+        
+        merge_position(ticker, new_data, existing.get(ticker))
         count += 1
     
     print(f"  ✅ Synced {count} GBM USA positions")
@@ -124,6 +162,7 @@ def sync_ibkr():
         print("  ⚠️ IBKR JSON not found")
         return 0
     
+    existing = {p['ticker']: p for p in get_positions()}
     watchlist = get_watchlist_grades()
     positions = data.get('positions', [])
     
@@ -135,13 +174,12 @@ def sync_ibkr():
         shares = pos.get('shares', 0)
         last_price = pos.get('last_price', 0)
         
-        # Derive avg_cost from cost_basis if available
         cost_basis = pos.get('cost_basis', 0)
         avg_cost = cost_basis / shares if shares and cost_basis else last_price * 0.9
         
         wl = watchlist.get(ticker, {})
         
-        upsert_position({
+        new_data = {
             'ticker': ticker,
             'shares': shares,
             'avg_cost': avg_cost,
@@ -152,7 +190,9 @@ def sync_ibkr():
             'brokers': ['IBKR'],
             'sector': wl.get('sector', ''),
             'updated_at': datetime.now().isoformat()
-        })
+        }
+        
+        merge_position(ticker, new_data, existing.get(ticker))
         count += 1
     
     print(f"  ✅ Synced {count} IBKR positions")
@@ -166,6 +206,7 @@ def sync_schwab():
         print("  ⚠️ Schwab JSON not found")
         return 0
     
+    existing = {p['ticker']: p for p in get_positions()}
     watchlist = get_watchlist_grades()
     positions = data.get('positions', [])
     
@@ -178,7 +219,6 @@ def sync_schwab():
         last_price = pos.get('last_price', 0)
         market_value = pos.get('market_value', 0)
         
-        # Derive avg_cost from unrealized_pnl if available
         unrealized = pos.get('unrealized_pnl', 0)
         cost_basis = pos.get('cost_basis', 0)
         if cost_basis and shares:
@@ -190,7 +230,7 @@ def sync_schwab():
         
         wl = watchlist.get(ticker, {})
         
-        upsert_position({
+        new_data = {
             'ticker': ticker,
             'shares': shares,
             'avg_cost': avg_cost,
@@ -201,7 +241,9 @@ def sync_schwab():
             'brokers': ['Schwab'],
             'sector': pos.get('sector', wl.get('sector', '')),
             'updated_at': datetime.now().isoformat()
-        })
+        }
+        
+        merge_position(ticker, new_data, existing.get(ticker))
         count += 1
     
     print(f"  ✅ Synced {count} Schwab positions")
@@ -215,10 +257,10 @@ def sync_binance():
         print("  ⚠️ Binance JSON not found")
         return 0
     
+    existing = {p['ticker']: p for p in get_positions()}
     watchlist = get_watchlist_grades()
     balances = data.get('balances', [])
     
-    # Filter meaningful balances (> $10)
     meaningful = [b for b in balances if b.get('value_usd', 0) > 10]
     
     print(f"  📊 Binance: {len(meaningful)} meaningful balances")
@@ -232,10 +274,10 @@ def sync_binance():
         
         wl = watchlist.get(asset, {})
         
-        upsert_position({
+        new_data = {
             'ticker': asset,
             'shares': total,
-            'avg_cost': price_usd * 0.85,  # Estimate
+            'avg_cost': price_usd * 0.85,
             'live_price': price_usd,
             'live_value': value_usd,
             'grade': wl.get('grade', 0),
@@ -243,7 +285,9 @@ def sync_binance():
             'brokers': ['Binance'],
             'sector': wl.get('sector', 'Crypto'),
             'updated_at': datetime.now().isoformat()
-        })
+        }
+        
+        merge_position(asset, new_data, existing.get(asset))
         count += 1
     
     print(f"  ✅ Synced {count} Binance positions")
@@ -257,10 +301,10 @@ def sync_bitso():
         print("  ⚠️ Bitso JSON not found")
         return 0
     
+    existing = {p['ticker']: p for p in get_positions()}
     watchlist = get_watchlist_grades()
     balances = data.get('balances', [])
     
-    # Filter meaningful balances (> $5)
     meaningful = [b for b in balances if b.get('value_usd', 0) > 5]
     
     print(f"  📊 Bitso: {len(meaningful)} meaningful balances")
@@ -274,7 +318,7 @@ def sync_bitso():
         
         wl = watchlist.get(asset, {})
         
-        upsert_position({
+        new_data = {
             'ticker': asset,
             'shares': total,
             'avg_cost': price_usd * 0.85,
@@ -285,7 +329,9 @@ def sync_bitso():
             'brokers': ['Bitso'],
             'sector': wl.get('sector', 'Crypto'),
             'updated_at': datetime.now().isoformat()
-        })
+        }
+        
+        merge_position(asset, new_data, existing.get(asset))
         count += 1
     
     print(f"  ✅ Synced {count} Bitso positions")

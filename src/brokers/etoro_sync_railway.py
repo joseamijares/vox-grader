@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 eToro Sync for Railway — Tries API first, falls back to local JSON
-Parses raw eToro API format.
 """
 
 import os
@@ -12,6 +11,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 from collections import defaultdict
+from decimal import Decimal
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sync.vox_postgres_sync import (
@@ -50,8 +50,7 @@ def parse_etoro_json(data: dict) -> list:
     cp = data.get('clientPortfolio', {})
     positions = cp.get('positions', [])
     
-    # Aggregate by symbol
-    aggregated = defaultdict(lambda: {"shares": 0, "value": 0, "avg_cost": 0, "price": 0})
+    aggregated = defaultdict(lambda: {"shares": 0.0, "value": 0.0, "avg_cost": 0.0, "price": 0.0})
     
     for pos in positions:
         symbol = pos.get('_instrumentSymbol', 'UNKNOWN')
@@ -59,23 +58,21 @@ def parse_etoro_json(data: dict) -> list:
             continue
             
         pnl = pos.get('unrealizedPnL', {})
-        exposure = pnl.get('exposureInAccountCurrency', 0)
-        close_rate = pnl.get('closeRate', 0)
+        exposure = float(pnl.get('exposureInAccountCurrency', 0) or 0)
+        close_rate = float(pnl.get('closeRate', 0) or 0)
         
-        units = pos.get('units', 0)
-        open_rate = pos.get('openRate', 0)
-        initial = pos.get('initialAmountInDollars', 0)
+        units = float(pos.get('units', 0) or 0)
+        open_rate = float(pos.get('openRate', 0) or 0)
+        initial = float(pos.get('initialAmountInDollars', 0) or 0)
         is_buy = pos.get('isBuy', True)
         
-        # Calculate shares
-        if units and units > 0:
+        if units > 0:
             shares = abs(units)
         elif close_rate > 0:
             shares = exposure / close_rate
         else:
             shares = 0
             
-        # Calculate avg_cost
         if initial > 0 and shares > 0:
             avg_cost = initial / shares
         elif open_rate > 0:
@@ -88,20 +85,26 @@ def parse_etoro_json(data: dict) -> list:
         aggregated[symbol]["avg_cost"] = avg_cost
         aggregated[symbol]["price"] = close_rate
     
-    # Build records
     records = []
     for symbol, data in aggregated.items():
         shares = abs(data["shares"])
         if shares > 0:
             records.append({
                 'ticker': symbol,
-                'shares': shares,
-                'avg_cost': data['avg_cost'],
-                'live_price': data['price'],
-                'live_value': data['value']
+                'shares': float(shares),
+                'avg_cost': float(data['avg_cost']),
+                'live_price': float(data['price']),
+                'live_value': float(data['value'])
             })
     
     return records
+
+
+def to_float(val):
+    """Convert Decimal or other numeric to float."""
+    if isinstance(val, Decimal):
+        return float(val)
+    return float(val) if val else 0.0
 
 
 def sync_etoro_from_json():
@@ -139,8 +142,8 @@ def sync_etoro_from_json():
             # Merge with existing
             old_brokers = existing_pos.get('brokers', []) or []
             new_brokers = list(set(old_brokers + ['eToro']))
-            old_shares = existing_pos.get('shares', 0) or 0
-            old_value = existing_pos.get('live_value', 0) or 0
+            old_shares = to_float(existing_pos.get('shares', 0))
+            old_value = to_float(existing_pos.get('live_value', 0))
             
             upsert_position({
                 'ticker': ticker,
@@ -185,7 +188,6 @@ def sync_etoro():
         
         print(f"  📊 eToro API: {len(records)} positions")
         
-        # Process API positions
         existing = {p['ticker']: p for p in get_positions()}
         watchlist = {w['ticker']: w for w in get_watchlist()}
         
@@ -199,10 +201,10 @@ def sync_etoro():
                 new_brokers = list(set(old_brokers + ['eToro']))
                 upsert_position({
                     'ticker': ticker,
-                    'shares': (existing_pos.get('shares', 0) or 0) + rec['shares'],
+                    'shares': to_float(existing_pos.get('shares', 0)) + rec['shares'],
                     'avg_cost': rec['avg_cost'],
                     'live_price': rec['live_price'],
-                    'live_value': (existing_pos.get('live_value', 0) or 0) + rec['live_value'],
+                    'live_value': to_float(existing_pos.get('live_value', 0)) + rec['live_value'],
                     'grade': wl.get('grade', existing_pos.get('grade', 0)),
                     'council': wl.get('council', existing_pos.get('council', 'N/A')),
                     'brokers': new_brokers,

@@ -77,8 +77,7 @@ def sync_etoro():
         print(f"[{datetime.now(timezone.utc)}] eToro sync complete")
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}] eToro sync failed: {e}")
-        import traceback
-        traceback.print_exc()
+        # Don't crash the whole service if eToro fails
 
 
 def daily_job():

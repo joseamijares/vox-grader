@@ -85,7 +85,7 @@ def upsert_position(record: dict):
     """Insert or update a position by ticker."""
     sql = """
     INSERT INTO positions (ticker, shares, avg_cost, live_price, live_value, grade, council, brokers, sector, updated_at)
-    VALUES (%(ticker)s, %(shares)s, %(avg_cost)s, %(live_price)s, %(live_value)s, %(grade)s, %(council)s, %(brokers)s::jsonb, %(sector)s, %(updated_at)s)
+    VALUES (%(ticker)s, %(shares)s, %(avg_cost)s, %(live_price)s, %(live_value)s, %(grade)s, %(council)s, to_jsonb(%(brokers)s), %(sector)s, %(updated_at)s)
     ON CONFLICT (ticker) DO UPDATE SET
         shares = EXCLUDED.shares,
         avg_cost = EXCLUDED.avg_cost,
@@ -93,7 +93,7 @@ def upsert_position(record: dict):
         live_value = EXCLUDED.live_value,
         grade = EXCLUDED.grade,
         council = EXCLUDED.council,
-        brokers = EXCLUDED.brokers,
+        brokers = to_jsonb(EXCLUDED.brokers),
         sector = EXCLUDED.sector,
         updated_at = EXCLUDED.updated_at
     """

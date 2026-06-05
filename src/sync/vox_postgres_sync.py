@@ -166,16 +166,16 @@ def upsert_watchlist(record: dict):
 
 def get_plays():
     with _get_cursor() as cur:
-        cur.execute("SELECT * FROM plays ORDER BY created_at DESC")
+        cur.execute("SELECT * FROM plays ORDER BY generated_at DESC")
         return cur.fetchall()
 
 
 def insert_play(record: dict):
     sql = """
-    INSERT INTO plays (ticker, name, direction, entry_price, target_price, stop_loss, status, grade, catalyst, created_at)
-    VALUES (%(ticker)s, %(name)s, %(direction)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(status)s, %(grade)s, %(catalyst)s, %(created_at)s)
+    INSERT INTO plays (ticker, name, direction, entry_price, target_price, stop_loss, status, grade, catalyst, generated_at)
+    VALUES (%(ticker)s, %(name)s, %(direction)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(status)s, %(grade)s, %(catalyst)s, %(generated_at)s)
     """
-    record.setdefault("created_at", _now_iso())
+    record.setdefault("generated_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
@@ -184,7 +184,7 @@ def insert_play(record: dict):
 
 def get_alerts():
     with _get_cursor() as cur:
-        cur.execute("SELECT * FROM alerts ORDER BY created_at DESC")
+        cur.execute("SELECT * FROM alerts ORDER BY generated_at DESC")
         return cur.fetchall()
 
 
@@ -195,14 +195,14 @@ def save_vox_grade(record: dict):
     INSERT INTO vox_grades (
         ticker, name, vox_grade, previous_grade, action, current_price, stop_loss,
         entry_point, position_value, shares, technical_score, fundamental_score,
-        macro_score, sector_score, weather_score, sentiment_score, catalysts, weather_factors, created_at
+        macro_score, sector_score, weather_score, sentiment_score, catalysts, weather_factors, generated_at
     ) VALUES (
         %(ticker)s, %(name)s, %(vox_grade)s, %(previous_grade)s, %(action)s, %(current_price)s, %(stop_loss)s,
         %(entry_point)s, %(position_value)s, %(shares)s, %(technical_score)s, %(fundamental_score)s,
-        %(macro_score)s, %(sector_score)s, %(weather_score)s, %(sentiment_score)s, %(catalysts)s, %(weather_factors)s, %(created_at)s
+        %(macro_score)s, %(sector_score)s, %(weather_score)s, %(sentiment_score)s, %(catalysts)s, %(weather_factors)s, %(generated_at)s
     )
     """
-    record.setdefault("created_at", _now_iso())
+    record.setdefault("generated_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 

@@ -97,7 +97,9 @@ def upsert_position(record: dict):
         sector = EXCLUDED.sector,
         updated_at = EXCLUDED.updated_at
     """
-    record["brokers"] = _to_jsonb(record.get("brokers", []))
+    # brokers is passed as Python list, to_jsonb() handles conversion
+    if isinstance(record.get("brokers"), str):
+        record["brokers"] = json.loads(record["brokers"])
     record.setdefault("updated_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)

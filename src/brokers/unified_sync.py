@@ -10,6 +10,7 @@ import os
 import sys
 import json
 from datetime import datetime
+from decimal import Decimal
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sync.vox_postgres_sync import (
@@ -36,6 +37,13 @@ def get_watchlist_grades():
         return {}
 
 
+def to_float(val):
+    """Convert Decimal or other numeric to float."""
+    if isinstance(val, Decimal):
+        return float(val)
+    return float(val) if val else 0.0
+
+
 def merge_position(ticker, new_data, existing):
     """Merge new broker data with existing position."""
     if not existing:
@@ -55,8 +63,8 @@ def merge_position(ticker, new_data, existing):
         merged = dict(existing)
         merged['brokers'] = merged_brokers
         # Add shares from this broker
-        merged['shares'] = (existing.get('shares', 0) or 0) + new_data.get('shares', 0)
-        merged['live_value'] = (existing.get('live_value', 0) or 0) + new_data.get('live_value', 0)
+        merged['shares'] = to_float(existing.get('shares', 0)) + to_float(new_data.get('shares', 0))
+        merged['live_value'] = to_float(existing.get('live_value', 0)) + to_float(new_data.get('live_value', 0))
         merged['updated_at'] = datetime.now().isoformat()
         upsert_position(merged)
     else:

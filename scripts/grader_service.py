@@ -70,22 +70,35 @@ def auto_grade_all():
 
 def sync_etoro():
     """Sync eToro positions to Railway DB."""
-    from brokers.etoro_sync_railway import sync_etoro as do_sync
-    print(f"[{datetime.now(timezone.utc)}] Starting eToro sync...")
     try:
+        from brokers.etoro_sync_railway import sync_etoro as do_sync
+        print(f"[{datetime.now(timezone.utc)}] Starting eToro sync...")
         do_sync()
         print(f"[{datetime.now(timezone.utc)}] eToro sync complete")
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}] eToro sync failed: {e}")
-        # Don't crash the whole service if eToro fails
+
+
+def sync_all_brokers():
+    """Sync all broker JSON portfolios."""
+    try:
+        from brokers.unified_sync import sync_all_brokers as do_sync
+        print(f"[{datetime.now(timezone.utc)}] Starting unified broker sync...")
+        do_sync()
+        print(f"[{datetime.now(timezone.utc)}] Unified broker sync complete")
+    except Exception as e:
+        print(f"[{datetime.now(timezone.utc)}] Unified broker sync failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def daily_job():
-    """Daily 7:30 AM job: sync + grade + alerts."""
+    """Daily 7:30 AM job: sync + grade."""
     print(f"\n{'='*60}")
     print(f"[{datetime.now(timezone.utc)}] DAILY VOX RUN")
     print(f"{'='*60}")
     sync_etoro()
+    sync_all_brokers()
     auto_grade_all()
     print(f"[{datetime.now(timezone.utc)}] Daily run complete\n")
 

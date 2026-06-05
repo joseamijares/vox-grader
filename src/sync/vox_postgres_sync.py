@@ -73,19 +73,26 @@ def _to_jsonb(val):
     return json.dumps(val)
 
 
-# -- CRUD: positions ----------------------------------------------------------
+# -- Positions ----------------------------------------------------------------
 
 def get_positions():
+    """Return all positions ordered by live_value DESC."""
     with _get_cursor() as cur:
         cur.execute("SELECT * FROM positions ORDER BY live_value DESC")
-        return [dict(r) for r in cur.fetchall()]
+        return cur.fetchall()
+
+
+def get_position_by_ticker(ticker: str):
+    with _get_cursor() as cur:
+        cur.execute("SELECT * FROM positions WHERE ticker = %s", (ticker,))
+        return cur.fetchone()
 
 
 def upsert_position(record: dict):
     """Insert or update a position by ticker."""
     sql = """
     INSERT INTO positions (ticker, shares, avg_cost, live_price, live_value, grade, council, brokers, sector, updated_at)
-    VALUES (%(ticker)s, %(shares)s, %(avg_cost)s, %(live_price)s, %(live_value)s, %(grade)s, %(council)s, to_jsonb(%(brokers)s), %(sector)s, %(updated_at)s)
+    VALUES (%(ticker)s, %(shares)s, %(avg_cost)s, %(live_price)s, %(live_value)s, %(grade)s, %(council)s, %(brokers)s, %(sector)s, %(updated_at)s)
     ON CONFLICT (ticker) DO UPDATE SET
         shares = EXCLUDED.shares,
         avg_cost = EXCLUDED.avg_cost,
@@ -93,13 +100,14 @@ def upsert_position(record: dict):
         live_value = EXCLUDED.live_value,
         grade = EXCLUDED.grade,
         council = EXCLUDED.council,
-        brokers = to_jsonb(EXCLUDED.brokers),
+        brokers = EXCLUDED.brokers,
         sector = EXCLUDED.sector,
         updated_at = EXCLUDED.updated_at
     """
-    # brokers is passed as Python list, to_jsonb() handles conversion
-    if isinstance(record.get("brokers"), str):
-        record["brokers"] = json.loads(record["brokers"])
+    # Ensure brokers is a proper PostgreSQL array literal
+    brokers = record.get("brokers", [])
+    if isinstance(brokers, list):
+        record["brokers"] = "{" + ",".join(brokers) + "}"
     record.setdefault("updated_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
@@ -131,139 +139,88 @@ def update_position(ticker: str, fields: dict):
         cur.execute(sql, fields)
 
 
-def get_position_by_ticker(ticker: str):
-    with _get_cursor() as cur:
-        cur.execute("SELECT * FROM positions WHERE ticker = %s", (ticker,))
-        row = cur.fetchone()
-        return dict(row) if row else None
-
-
-# -- CRUD: vox_grades (full 6-layer breakdown) --------------------------------
-
-def save_vox_grade(record: dict):
-    """Save a full 6-layer VOX grade breakdown."""
-    sql = """
-    INSERT INTO vox_grades (
-        ticker, name, vox_grade, previous_grade, action, current_price,
-        stop_loss, entry_point, position_value, shares,
-        technical_score, fundamental_score, macro_score, sector_score,
-        weather_score, sentiment_score, catalysts, weather_factors, generated_at
-    ) VALUES (
-        %(ticker)s, %(name)s, %(vox_grade)s, %(previous_grade)s, %(action)s, %(current_price)s,
-        %(stop_loss)s, %(entry_point)s, %(position_value)s, %(shares)s,
-        %(technical_score)s, %(fundamental_score)s, %(macro_score)s, %(sector_score)s,
-        %(weather_score)s, %(sentiment_score)s, %(catalysts)s, %(weather_factors)s, %(generated_at)s
-    )
-    ON CONFLICT (ticker, generated_at) DO UPDATE SET
-        vox_grade = EXCLUDED.vox_grade,
-        action = EXCLUDED.action,
-        current_price = EXCLUDED.current_price,
-        stop_loss = EXCLUDED.stop_loss,
-        entry_point = EXCLUDED.entry_point,
-        position_value = EXCLUDED.position_value,
-        shares = EXCLUDED.shares,
-        technical_score = EXCLUDED.technical_score,
-        fundamental_score = EXCLUDED.fundamental_score,
-        macro_score = EXCLUDED.macro_score,
-        sector_score = EXCLUDED.sector_score,
-        weather_score = EXCLUDED.weather_score,
-        sentiment_score = EXCLUDED.sentiment_score,
-        catalysts = EXCLUDED.catalysts,
-        weather_factors = EXCLUDED.weather_factors
-    """
-    record.setdefault("generated_at", _now_iso())
-    with _get_cursor() as cur:
-        cur.execute(sql, record)
-
-
-def get_vox_grades():
-    with _get_cursor() as cur:
-        cur.execute("SELECT * FROM vox_grades ORDER BY vox_grade DESC")
-        return [dict(r) for r in cur.fetchall()]
-
-
-def get_vox_grade_by_ticker(ticker: str):
-    with _get_cursor() as cur:
-        cur.execute(
-            "SELECT * FROM vox_grades WHERE ticker = %s ORDER BY generated_at DESC LIMIT 1",
-            (ticker,)
-        )
-        row = cur.fetchone()
-        return dict(row) if row else None
-
-
-# -- CRUD: watchlist ----------------------------------------------------------
+# -- Watchlist ----------------------------------------------------------------
 
 def get_watchlist():
     with _get_cursor() as cur:
-        cur.execute("SELECT * FROM watchlist ORDER BY grade DESC")
-        return [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM watchlist ORDER BY grade DESC NULLS LAST")
+        return cur.fetchall()
 
 
 def upsert_watchlist(record: dict):
     sql = """
-    INSERT INTO watchlist (ticker, name, sector, thesis, entry_price, target_price, stop_loss, grade, council, status, added_at, notes)
-    VALUES (%(ticker)s, %(name)s, %(sector)s, %(thesis)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(grade)s, %(council)s, %(status)s, %(added_at)s, %(notes)s)
+    INSERT INTO watchlist (ticker, name, grade, council, sector, entry_price, target_price, stop_loss, updated_at)
+    VALUES (%(ticker)s, %(name)s, %(grade)s, %(council)s, %(sector)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(updated_at)s)
     ON CONFLICT (ticker) DO UPDATE SET
-        name = EXCLUDED.name,
-        sector = EXCLUDED.sector,
-        thesis = EXCLUDED.thesis,
-        entry_price = EXCLUDED.entry_price,
-        target_price = EXCLUDED.target_price,
-        stop_loss = EXCLUDED.stop_loss,
-        grade = EXCLUDED.grade,
-        council = EXCLUDED.council,
-        status = EXCLUDED.status,
-        notes = EXCLUDED.notes
+        name = EXCLUDED.name, grade = EXCLUDED.grade, council = EXCLUDED.council,
+        sector = EXCLUDED.sector, entry_price = EXCLUDED.entry_price,
+        target_price = EXCLUDED.target_price, stop_loss = EXCLUDED.stop_loss,
+        updated_at = EXCLUDED.updated_at
     """
-    record.setdefault("added_at", _now_iso())
+    record.setdefault("updated_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
 
-# -- CRUD: plays --------------------------------------------------------------
+# -- Plays --------------------------------------------------------------------
 
 def get_plays():
     with _get_cursor() as cur:
-        cur.execute("SELECT * FROM plays ORDER BY timestamp DESC")
-        return [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM plays ORDER BY created_at DESC")
+        return cur.fetchall()
 
 
 def insert_play(record: dict):
     sql = """
-    INSERT INTO plays (timestamp, ticker, action, shares, price, notional, broker, reason, grade_at_entry, council_at_entry, notes, closed, exit_price, exit_date, pnl, pnl_pct)
-    VALUES (%(timestamp)s, %(ticker)s, %(action)s, %(shares)s, %(price)s, %(notional)s, %(broker)s, %(reason)s, %(grade_at_entry)s, %(council_at_entry)s, %(notes)s, %(closed)s, %(exit_price)s, %(exit_date)s, %(pnl)s, %(pnl_pct)s)
+    INSERT INTO plays (ticker, name, direction, entry_price, target_price, stop_loss, status, grade, catalyst, created_at)
+    VALUES (%(ticker)s, %(name)s, %(direction)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(status)s, %(grade)s, %(catalyst)s, %(created_at)s)
     """
-    record.setdefault("timestamp", _now_iso())
+    record.setdefault("created_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
 
-# -- CRUD: alerts -------------------------------------------------------------
+# -- Alerts -------------------------------------------------------------------
 
 def get_alerts():
     with _get_cursor() as cur:
-        cur.execute("SELECT * FROM alerts ORDER BY timestamp DESC")
-        return [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM alerts ORDER BY created_at DESC")
+        return cur.fetchall()
 
 
-# -- CRUD: sector_momentum ----------------------------------------------------
+# -- VOX Grades ---------------------------------------------------------------
+
+def save_vox_grade(record: dict):
+    sql = """
+    INSERT INTO vox_grades (
+        ticker, name, vox_grade, previous_grade, action, current_price, stop_loss,
+        entry_point, position_value, shares, technical_score, fundamental_score,
+        macro_score, sector_score, weather_score, sentiment_score, catalysts, weather_factors, created_at
+    ) VALUES (
+        %(ticker)s, %(name)s, %(vox_grade)s, %(previous_grade)s, %(action)s, %(current_price)s, %(stop_loss)s,
+        %(entry_point)s, %(position_value)s, %(shares)s, %(technical_score)s, %(fundamental_score)s,
+        %(macro_score)s, %(sector_score)s, %(weather_score)s, %(sentiment_score)s, %(catalysts)s, %(weather_factors)s, %(created_at)s
+    )
+    """
+    record.setdefault("created_at", _now_iso())
+    with _get_cursor() as cur:
+        cur.execute(sql, record)
+
+
+# -- Sector Momentum ----------------------------------------------------------
 
 def get_sector_momentum():
     with _get_cursor() as cur:
-        cur.execute("SELECT * FROM sector_momentum ORDER BY updated_at DESC")
-        return [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT * FROM sector_momentum ORDER BY momentum_score DESC")
+        return cur.fetchall()
 
 
 def upsert_sector_momentum(record: dict):
     sql = """
-    INSERT INTO sector_momentum (sector, momentum_score, trend, top_tickers, updated_at)
-    VALUES (%(sector)s, %(momentum_score)s, %(trend)s, %(top_tickers)s::jsonb, %(updated_at)s)
+    INSERT INTO sector_momentum (sector, momentum_score, top_tickers, updated_at)
+    VALUES (%(sector)s, %(momentum_score)s, %(top_tickers)s, %(updated_at)s)
     ON CONFLICT (sector) DO UPDATE SET
-        momentum_score = EXCLUDED.momentum_score,
-        trend = EXCLUDED.trend,
-        top_tickers = EXCLUDED.top_tickers,
-        updated_at = EXCLUDED.updated_at
+        momentum_score = EXCLUDED.momentum_score, top_tickers = EXCLUDED.top_tickers, updated_at = EXCLUDED.updated_at
     """
     record["top_tickers"] = _to_jsonb(record.get("top_tickers", []))
     record.setdefault("updated_at", _now_iso())
@@ -271,68 +228,75 @@ def upsert_sector_momentum(record: dict):
         cur.execute(sql, record)
 
 
-# -- CRUD: weather_patterns ---------------------------------------------------
+# -- Weather Patterns ---------------------------------------------------------
 
 def get_weather_patterns():
     with _get_cursor() as cur:
         cur.execute("SELECT * FROM weather_patterns ORDER BY date DESC")
-        return [dict(r) for r in cur.fetchall()]
+        return cur.fetchall()
 
 
 def insert_weather_pattern(record: dict):
     sql = """
-    INSERT INTO weather_patterns (date, regime, vix_level, spy_trend, notes, signals)
-    VALUES (%(date)s, %(regime)s, %(vix_level)s, %(spy_trend)s, %(notes)s, %(signals)s::jsonb)
+    INSERT INTO weather_patterns (pattern, severity, sectors, tickers, date, notes)
+    VALUES (%(pattern)s, %(severity)s, %(sectors)s, %(tickers)s, %(date)s, %(notes)s)
     """
-    record["signals"] = _to_jsonb(record.get("signals", []))
+    record["sectors"] = _to_jsonb(record.get("sectors", []))
+    record["tickers"] = _to_jsonb(record.get("tickers", []))
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
 
-# -- CRUD: macro_signals ------------------------------------------------------
+# -- Macro Signals ------------------------------------------------------------
 
 def get_macro_signals():
     with _get_cursor() as cur:
         cur.execute("SELECT * FROM macro_signals ORDER BY date DESC")
-        return [dict(r) for r in cur.fetchall()]
+        return cur.fetchall()
 
 
 def upsert_macro_signal(record: dict):
     sql = """
-    INSERT INTO macro_signals (date, signal_type, strength, description, impact_sectors)
-    VALUES (%(date)s, %(signal_type)s, %(strength)s, %(description)s, %(impact_sectors)s::jsonb)
-    ON CONFLICT (date, signal_type) DO UPDATE SET
-        strength = EXCLUDED.strength,
-        description = EXCLUDED.description,
-        impact_sectors = EXCLUDED.impact_sectors
+    INSERT INTO macro_signals (signal_type, direction, impact_score, impact_sectors, notes, date)
+    VALUES (%(signal_type)s, %(direction)s, %(impact_score)s, %(impact_sectors)s, %(notes)s, %(date)s)
+    ON CONFLICT (signal_type, date) DO UPDATE SET
+        direction = EXCLUDED.direction, impact_score = EXCLUDED.impact_score,
+        impact_sectors = EXCLUDED.impact_sectors, notes = EXCLUDED.notes
     """
     record["impact_sectors"] = _to_jsonb(record.get("impact_sectors", []))
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
 
-# -- CRUD: technical_signals --------------------------------------------------
+# -- Technical Signals --------------------------------------------------------
 
 def get_technical_signals():
     with _get_cursor() as cur:
         cur.execute("SELECT * FROM technical_signals ORDER BY date DESC")
-        return [dict(r) for r in cur.fetchall()]
+        return cur.fetchall()
 
 
 def upsert_technical_signal(record: dict):
     sql = """
-    INSERT INTO technical_signals (date, ticker, signal, timeframe, strength, notes)
-    VALUES (%(date)s, %(ticker)s, %(signal)s, %(timeframe)s, %(strength)s, %(notes)s)
-    ON CONFLICT (date, ticker, signal) DO UPDATE SET
-        timeframe = EXCLUDED.timeframe,
-        strength = EXCLUDED.strength,
-        notes = EXCLUDED.notes
+    INSERT INTO technical_signals (ticker, signal_type, strength, signals, notes, date)
+    VALUES (%(ticker)s, %(signal_type)s, %(strength)s, %(signals)s, %(notes)s, %(date)s)
+    ON CONFLICT (ticker, signal_type, date) DO UPDATE SET
+        strength = EXCLUDED.strength, signals = EXCLUDED.signals, notes = EXCLUDED.notes
     """
+    record["signals"] = _to_jsonb(record.get("signals", []))
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
 
-# -- Fake Supabase client (back-compat) ---------------------------------------
+# -- Journal ------------------------------------------------------------------
+
+def get_journal():
+    with _get_cursor() as cur:
+        cur.execute("SELECT * FROM journal ORDER BY date DESC")
+        return cur.fetchall()
+
+
+# -- Fake Supabase Client (Backward compat) -----------------------------------
 
 class _FakeSupabase:
     """Drop-in replacement for supabase.create_client().
@@ -494,6 +458,6 @@ def get_client():
 if __name__ == "__main__":
     print("Testing PostgreSQL sync...")
     positions = get_positions()
-    print(f"Loaded {len(positions)} positions from PostgreSQL")
-    plays = get_plays()
-    print(f"Loaded {len(plays)} plays from PostgreSQL")
+    print(f"  Positions: {len(positions)}")
+    if positions:
+        print(f"  Top: {positions[0]['ticker']} = ${positions[0]['live_value']}")

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from sync.vox_postgres_sync import get_positions, update_position, save_vox_grade
+from sync.vox_postgres_sync import get_positions, get_watchlist, update_position, save_vox_grade
 from grading.engine import calculate_grade
 
 # Import 6-layer system
@@ -208,11 +208,11 @@ def integrated_grade_all():
                 'vox_grade': integrated_grade,
                 'previous_grade': info['data'].get('grade', 0) or 0,
                 'action': council,
-                'current_price': info['data'].get('live_price', 0),
-                'stop_loss': info['data'].get('live_price', 0) * 0.85 if info['data'].get('live_price') else 0,
-                'entry_point': info['data'].get('live_price', 0) * 0.95 if info['data'].get('live_price') else 0,
-                'position_value': info['data'].get('live_value', 0),
-                'shares': info['data'].get('shares', 0),
+                'current_price': float(info['data'].get('live_price', 0)),
+                'stop_loss': float(info['data'].get('live_price', 0)) * 0.85 if info['data'].get('live_price') else 0,
+                'entry_point': float(info['data'].get('live_price', 0)) * 0.95 if info['data'].get('live_price') else 0,
+                'position_value': float(info['data'].get('live_value', 0)),
+                'shares': float(info['data'].get('shares', 0)),
                 'technical_score': base_result.technical_score,
                 'fundamental_score': base_result.fundamental_score,
                 'macro_score': layer_scores['macro_score'],

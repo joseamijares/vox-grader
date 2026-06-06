@@ -223,13 +223,22 @@ def get_sector_momentum():
 
 def upsert_sector_momentum(record: dict):
     sql = """
-    INSERT INTO sector_momentum (sector, momentum_score, top_tickers, updated_at)
-    VALUES (%(sector)s, %(momentum_score)s, %(top_tickers)s, %(updated_at)s)
+    INSERT INTO sector_momentum (sector, avg_grade, avg_return_1d, avg_return_5d, avg_return_20d, momentum_score, top_tickers, buy_count, hold_count, sell_count, computed_at)
+    VALUES (%(sector)s, %(avg_grade)s, %(avg_return_1d)s, %(avg_return_5d)s, %(avg_return_20d)s, %(momentum_score)s, %(top_tickers)s, %(buy_count)s, %(hold_count)s, %(sell_count)s, %(computed_at)s)
     ON CONFLICT (sector) DO UPDATE SET
-        momentum_score = EXCLUDED.momentum_score, top_tickers = EXCLUDED.top_tickers, updated_at = EXCLUDED.updated_at
+        avg_grade = EXCLUDED.avg_grade,
+        avg_return_1d = EXCLUDED.avg_return_1d,
+        avg_return_5d = EXCLUDED.avg_return_5d,
+        avg_return_20d = EXCLUDED.avg_return_20d,
+        momentum_score = EXCLUDED.momentum_score,
+        top_tickers = EXCLUDED.top_tickers,
+        buy_count = EXCLUDED.buy_count,
+        hold_count = EXCLUDED.hold_count,
+        sell_count = EXCLUDED.sell_count,
+        computed_at = EXCLUDED.computed_at
     """
     record["top_tickers"] = _to_jsonb(record.get("top_tickers", []))
-    record.setdefault("updated_at", _now_iso())
+    record.setdefault("computed_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
@@ -244,11 +253,12 @@ def get_weather_patterns():
 
 def insert_weather_pattern(record: dict):
     sql = """
-    INSERT INTO weather_patterns (pattern, severity, sectors, tickers, date, notes)
-    VALUES (%(pattern)s, %(severity)s, %(sectors)s, %(tickers)s, %(date)s, %(notes)s)
+    INSERT INTO weather_patterns (region, pattern_type, severity, affected_sectors, affected_tickers, start_date, end_date, computed_at)
+    VALUES (%(region)s, %(pattern_type)s, %(severity)s, %(affected_sectors)s, %(affected_tickers)s, %(start_date)s, %(end_date)s, %(computed_at)s)
     """
-    record["sectors"] = _to_jsonb(record.get("sectors", []))
-    record["tickers"] = _to_jsonb(record.get("tickers", []))
+    record["affected_sectors"] = _to_jsonb(record.get("affected_sectors", []))
+    record["affected_tickers"] = _to_jsonb(record.get("affected_tickers", []))
+    record.setdefault("computed_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 
@@ -263,13 +273,17 @@ def get_macro_signals():
 
 def upsert_macro_signal(record: dict):
     sql = """
-    INSERT INTO macro_signals (signal_type, direction, impact_score, impact_sectors, notes, date)
-    VALUES (%(signal_type)s, %(direction)s, %(impact_score)s, %(impact_sectors)s, %(notes)s, %(date)s)
-    ON CONFLICT (signal_type, date) DO UPDATE SET
-        direction = EXCLUDED.direction, impact_score = EXCLUDED.impact_score,
-        impact_sectors = EXCLUDED.impact_sectors, notes = EXCLUDED.notes
+    INSERT INTO macro_signals (signal_name, signal_value, signal_direction, impact_sector, confidence, source, computed_at)
+    VALUES (%(signal_name)s, %(signal_value)s, %(signal_direction)s, %(impact_sector)s, %(confidence)s, %(source)s, %(computed_at)s)
+    ON CONFLICT (signal_name) DO UPDATE SET
+        signal_value = EXCLUDED.signal_value,
+        signal_direction = EXCLUDED.signal_direction,
+        impact_sector = EXCLUDED.impact_sector,
+        confidence = EXCLUDED.confidence,
+        source = EXCLUDED.source,
+        computed_at = EXCLUDED.computed_at
     """
-    record["impact_sectors"] = _to_jsonb(record.get("impact_sectors", []))
+    record.setdefault("computed_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 

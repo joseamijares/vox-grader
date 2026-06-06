@@ -11,7 +11,10 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from sync.vox_postgres_sync import get_positions, get_watchlist, update_position, save_vox_grade, upsert_watchlist
+from sync.vox_postgres_sync import (
+    get_positions, get_watchlist, update_position, save_vox_grade, upsert_watchlist,
+    upsert_sector_momentum, insert_weather_pattern, upsert_macro_signal
+)
 from grading.vox_engine import calculate_vox_grade, batch_vox_grade
 
 # Import 6-layer system
@@ -139,6 +142,54 @@ def integrated_grade_all():
     macro_signals = run_macro_layer()
     sector_momentum = run_sector_layer()
     weather_patterns = run_weather_layer()
+
+    # Step 1b: Save layer data to DB
+    print(f"[{datetime.now(timezone.utc)}] 💾 Saving layer data to DB...")
+    for sig in macro_signals:
+        try:
+            upsert_macro_signal({
+                "signal_name": sig.get("signal_name", "UNKNOWN"),
+                "signal_value": sig.get("signal_value", 0),
+                "signal_direction": sig.get("signal_direction", "NEUTRAL"),
+                "impact_sector": sig.get("impact_sector", ""),
+                "confidence": sig.get("confidence", 50),
+                "source": sig.get("source", "macro_trends"),
+            })
+        except Exception as e:
+            print(f"   ❌ Macro save error: {e}")
+
+    for sec in sector_momentum:
+        try:
+            upsert_sector_momentum({
+                "sector": sec["sector"],
+                "avg_grade": sec.get("avg_grade", 50),
+                "avg_return_1d": 0,
+                "avg_return_5d": 0,
+                "avg_return_20d": 0,
+                "momentum_score": sec["momentum_score"],
+                "top_tickers": sec.get("top_tickers", []),
+                "buy_count": 0,
+                "hold_count": 0,
+                "sell_count": 0,
+            })
+        except Exception as e:
+            print(f"   ❌ Sector save error: {e}")
+
+    for pat in weather_patterns:
+        try:
+            insert_weather_pattern({
+                "region": pat.get("region", ""),
+                "pattern_type": pat.get("pattern_type", ""),
+                "severity": pat.get("severity", 1),
+                "affected_sectors": pat.get("affected_sectors", []),
+                "affected_tickers": pat.get("affected_tickers", []),
+                "start_date": pat.get("start_date", ""),
+                "end_date": pat.get("end_date", ""),
+            })
+        except Exception as e:
+            print(f"   ❌ Weather save error: {e}")
+
+    print(f"[{datetime.now(timezone.utc)}] ✅ Layer data saved")
 
     # Step 2: Get all items to grade
     positions = get_positions()

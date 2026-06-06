@@ -28,12 +28,20 @@ def compute_sector_momentum(positions, watchlist):
     sector_buys = defaultdict(int)
     sector_sells = defaultdict(int)
 
+    def _grade(item):
+        g = item.get("grade")
+        if g is None:
+            return 0
+        try:
+            return int(float(g))
+        except (ValueError, TypeError):
+            return 0
+
     for item in all_items:
         sector = item.get("sector") or "Uncategorized"
         ticker = item["ticker"]
         sector_tickers[sector].append(ticker)
-        if item.get("grade"):
-            sector_grades[sector].append(int(item["grade"]))
+        sector_grades[sector].append(_grade(item))
         council = (item.get("council") or "").upper()
         if council.startswith("BUY"):
             sector_buys[sector] += 1
@@ -56,15 +64,26 @@ def compute_sector_momentum(positions, watchlist):
             trend = "NEGATIVE"
         else:
             trend = "WEAK"
+
+        # Top tickers by grade in this sector
+        ticker_grades = {}
+        for item in all_items:
+            t = item["ticker"]
+            if t in unique:
+                g = _grade(item)
+                if t not in ticker_grades or g > ticker_grades[t]:
+                    ticker_grades[t] = g
+        top_tickers = sorted(ticker_grades.keys(), key=lambda t: -ticker_grades[t])[:5]
+
         results.append({
             "sector": sector,
             "momentum_score": mom,
             "trend": trend,
             "ticker_count": len(unique),
             "avg_grade": round(avg, 1),
+            "top_tickers": top_tickers,
         })
     return results
-
 
 def run_macro_layer() -> list:
     """Run macro trends layer."""

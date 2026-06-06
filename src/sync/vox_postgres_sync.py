@@ -149,15 +149,21 @@ def get_watchlist():
 
 def upsert_watchlist(record: dict):
     sql = """
-    INSERT INTO watchlist (ticker, name, grade, council, sector, entry_price, target_price, stop_loss, updated_at)
-    VALUES (%(ticker)s, %(name)s, %(grade)s, %(council)s, %(sector)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(updated_at)s)
+    INSERT INTO watchlist (ticker, name, sector, thesis, entry_price, target_price, stop_loss, grade, council, status, added_at, notes)
+    VALUES (%(ticker)s, %(name)s, %(sector)s, %(thesis)s, %(entry_price)s, %(target_price)s, %(stop_loss)s, %(grade)s, %(council)s, %(status)s, %(added_at)s, %(notes)s)
     ON CONFLICT (ticker) DO UPDATE SET
-        name = EXCLUDED.name, grade = EXCLUDED.grade, council = EXCLUDED.council,
-        sector = EXCLUDED.sector, entry_price = EXCLUDED.entry_price,
-        target_price = EXCLUDED.target_price, stop_loss = EXCLUDED.stop_loss,
-        updated_at = EXCLUDED.updated_at
+        name = EXCLUDED.name,
+        sector = EXCLUDED.sector,
+        thesis = EXCLUDED.thesis,
+        entry_price = EXCLUDED.entry_price,
+        target_price = EXCLUDED.target_price,
+        stop_loss = EXCLUDED.stop_loss,
+        grade = EXCLUDED.grade,
+        council = EXCLUDED.council,
+        status = EXCLUDED.status,
+        notes = EXCLUDED.notes
     """
-    record.setdefault("updated_at", _now_iso())
+    record.setdefault("added_at", _now_iso())
     with _get_cursor() as cur:
         cur.execute(sql, record)
 

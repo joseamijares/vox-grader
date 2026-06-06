@@ -67,10 +67,16 @@ def _now_iso():
 
 
 def _to_jsonb(val):
-    """Convert Python list/dict to JSONB string for Postgres."""
+    """Convert Python list to PostgreSQL TEXT[] literal."""
     if val is None:
-        return "[]"
-    return json.dumps(val)
+        return "{}"
+    if isinstance(val, list):
+        if not val:
+            return "{}"
+        # Postgres TEXT[] literal: {"a", "b", "c"}
+        escaped = [str(v).replace('"', '\\"') for v in val]
+        return "{" + ",".join(f'"{v}"' for v in escaped) + "}"
+    return str(val)
 
 
 # -- Positions ----------------------------------------------------------------

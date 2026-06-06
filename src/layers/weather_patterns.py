@@ -147,6 +147,9 @@ def map_tickers_to_weather(sb_client, patterns: List[Dict]) -> List[Dict]:
 
 def run_weather_scan() -> Dict:
     """Run full weather pattern scan."""
+    from sync.vox_postgres_sync import get_client
+    sb = get_client()
+    
     print("Fetching NOAA weather alerts...")
     alerts = get_noaa_active_alerts()
     print(f"  Found {len(alerts)} high-impact alerts")
@@ -157,7 +160,7 @@ def run_weather_scan() -> Dict:
     # Map to tickers
     patterns = map_tickers_to_weather(sb, patterns)
     
-    # Store in Supabase
+    # Store in Postgres
     print(f"Storing {len(patterns)} weather patterns...")
     for p in patterns:
         p['computed_at'] = datetime.now().isoformat()

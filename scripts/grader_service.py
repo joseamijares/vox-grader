@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 VOX Grader Service — Runs inside Railway, connects to Railway Postgres
-Integrated 6-Layer Grading Pipeline
+Integrated 6-Layer Grading Pipeline v2
 """
 import os
 import sys
@@ -11,55 +11,59 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from sync.vox_postgres_sync import get_positions, get_watchlist, update_position, save_vox_grade
-from grading.engine import calculate_grade
+from sync.vox_postgres_sync import get_positions, get_watchlist, update_position, save_vox_grade, upsert_watchlist
+from grading.vox_engine import calculate_vox_grade, batch_vox_grade
 
 # Import 6-layer system
 from layers.macro_trends import get_macro_data, compute_macro_signals
-from layers.sector_momentum import compute_sector_momentum
 from layers.weather_patterns import get_noaa_active_alerts, classify_weather_impact
+from collections import defaultdict
 
 
-def get_layer_scores(ticker: str, sector: str,
-                     macro_signals: list,
-                     sector_momentum: list,
-                     weather_patterns: list) -> dict:
-    """Get real layer scores for a specific ticker."""
-    
-    # Macro score (0-100)
-    macro_score = 50
-    macro_reasoning = []
-    for signal in macro_signals:
-        direction = signal.get('signal_direction', 'NEUTRAL')
-        impact_sector = signal.get('impact_sector', 'All')
-        if impact_sector == 'All' or impact_sector == sector:
-            if direction == 'BULLISH':
-                macro_score += 10
-                macro_reasoning.append(f"Bullish macro: {signal['signal_name']}")
-            elif direction == 'BEARISH':
-                macro_score -= 10
-                macro_reasoning.append(f"Bearish macro: {signal['signal_name']}")
-    macro_score = max(0, min(100, macro_score))
-    
-    # Sector score (0-100)
-    sector_score = 50
-    sector_data = next((s for s in sector_momentum if s['sector'] == sector), None)
-    if sector_data:
-        sector_score = sector_data.get('momentum_score', 50)
-    
-    # Weather score (0-100, default 70 = neutral/slight positive)
-    weather_score = 70
-    weather_hits = [w for w in weather_patterns if sector in w.get('affected_sectors', [])]
-    if weather_hits:
-        max_severity = max(w.get('severity', 1) for w in weather_hits)
-        weather_score = max(0, 70 - max_severity * 10)
-    
-    return {
-        'macro_score': macro_score,
-        'sector_score': sector_score,
-        'weather_score': weather_score,
-        'macro_reasoning': macro_reasoning
-    }
+def compute_sector_momentum(positions, watchlist):
+    """Compute sector momentum from current grades and councils."""
+    all_items = positions + watchlist
+    sector_tickers = defaultdict(list)
+    sector_grades = defaultdict(list)
+    sector_buys = defaultdict(int)
+    sector_sells = defaultdict(int)
+
+    for item in all_items:
+        sector = item.get("sector") or "Uncategorized"
+        ticker = item["ticker"]
+        sector_tickers[sector].append(ticker)
+        if item.get("grade"):
+            sector_grades[sector].append(int(item["grade"]))
+        council = (item.get("council") or "").upper()
+        if council.startswith("BUY"):
+            sector_buys[sector] += 1
+        elif council.startswith("SELL"):
+            sector_sells[sector] += 1
+
+    results = []
+    for sector, tickers in sector_tickers.items():
+        unique = list(set(tickers))
+        grades = sector_grades.get(sector, [])
+        avg = sum(grades) / len(grades) if grades else 50
+        mom = min(100, max(0, int(avg + (sector_buys[sector] - sector_sells[sector]) * 5)))
+        if mom >= 70:
+            trend = "STRONG"
+        elif mom >= 55:
+            trend = "POSITIVE"
+        elif mom >= 45:
+            trend = "NEUTRAL"
+        elif mom >= 30:
+            trend = "NEGATIVE"
+        else:
+            trend = "WEAK"
+        results.append({
+            "sector": sector,
+            "momentum_score": mom,
+            "trend": trend,
+            "ticker_count": len(unique),
+            "avg_grade": round(avg, 1),
+        })
+    return results
 
 
 def run_macro_layer() -> list:
@@ -69,6 +73,8 @@ def run_macro_layer() -> list:
         macro_data = get_macro_data()
         signals = compute_macro_signals(macro_data)
         print(f"[{datetime.now(timezone.utc)}]   ✅ {len(signals)} macro signals")
+        for s in signals:
+            print(f"      {s['signal_direction']:10s} {s['signal_name']}")
         return signals
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}]   ❌ Macro error: {e}")
@@ -79,47 +85,13 @@ def run_sector_layer() -> list:
     """Run sector momentum layer."""
     print(f"[{datetime.now(timezone.utc)}] 🏭 Running Sector Momentum...")
     try:
-        from collections import defaultdict
         positions = get_positions()
         watchlist = get_watchlist()
-        all_items = positions + watchlist
-        
-        sector_tickers = defaultdict(list)
-        sector_grades = defaultdict(list)
-        
-        for item in all_items:
-            sector = item.get('sector') or 'Uncategorized'
-            ticker = item['ticker']
-            sector_tickers[sector].append(ticker)
-            if item.get('grade'):
-                sector_grades[sector].append(int(item['grade']))
-        
-        sector_results = []
-        for sector, tickers in sector_tickers.items():
-            unique_tickers = list(set(tickers))
-            grades = sector_grades.get(sector, [])
-            avg_grade = sum(grades) / len(grades) if grades else 50
-            
-            buy_count = sum(1 for t in unique_tickers if any(
-                (w.get('council') or '').startswith('BUY') for w in watchlist if w['ticker'] == t
-            ))
-            sell_count = sum(1 for t in unique_tickers if any(
-                (w.get('council') or '').startswith('SELL') for w in watchlist if w['ticker'] == t
-            ))
-            
-            momentum_score = min(100, max(0, int(avg_grade + (buy_count - sell_count) * 5)))
-            
-            sector_results.append({
-                'sector': sector,
-                'momentum_score': momentum_score,
-                'ticker_count': len(unique_tickers),
-                'avg_grade': round(avg_grade, 1),
-                'buy_signals': buy_count,
-                'sell_signals': sell_count
-            })
-        
-        print(f"[{datetime.now(timezone.utc)}]   ✅ {len(sector_results)} sectors analyzed")
-        return sector_results
+        results = compute_sector_momentum(positions, watchlist)
+        print(f"[{datetime.now(timezone.utc)}]   ✅ {len(results)} sectors analyzed")
+        for s in results[:5]:
+            print(f"      {s['sector']:25s} score={s['momentum_score']:3d} trend={s['trend']}")
+        return results
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}]   ❌ Sector error: {e}")
         return []
@@ -131,7 +103,7 @@ def run_weather_layer() -> list:
     try:
         alerts = get_noaa_active_alerts()
         patterns = classify_weather_impact(alerts)
-        print(f"[{datetime.now(timezone.utc)}]   ✅ {len(patterns)} weather patterns")
+        print(f"[{datetime.now(timezone.utc)}]   ✅ {len(patterns)} weather patterns from {len(alerts)} alerts")
         return patterns
     except Exception as e:
         print(f"[{datetime.now(timezone.utc)}]   ❌ Weather error: {e}")
@@ -140,99 +112,100 @@ def run_weather_layer() -> list:
 
 def integrated_grade_all():
     """Run full integrated 6-layer grading on all positions and watchlist."""
-    from sync.vox_postgres_sync import get_watchlist
-    
     print(f"\n{'='*60}")
-    print(f"[{datetime.now(timezone.utc)}] 🧠 INTEGRATED 6-LAYER GRADING")
+    print(f"[{datetime.now(timezone.utc)}] 🧠 INTEGRATED 6-LAYER GRADING v2")
     print(f"{'='*60}")
-    
+
     # Step 1: Run all layers
     macro_signals = run_macro_layer()
     sector_momentum = run_sector_layer()
     weather_patterns = run_weather_layer()
-    
+
     # Step 2: Get all items to grade
     positions = get_positions()
     watchlist = get_watchlist()
-    
+
     all_tickers = {}
     for p in positions:
-        all_tickers[p['ticker']] = {'type': 'position', 'data': p}
+        all_tickers[p["ticker"]] = {"type": "position", "data": p}
     for w in watchlist:
-        if w['ticker'] not in all_tickers:
-            all_tickers[w['ticker']] = {'type': 'watchlist', 'data': w}
-    
+        if w["ticker"] not in all_tickers:
+            all_tickers[w["ticker"]] = {"type": "watchlist", "data": w}
+
     print(f"[{datetime.now(timezone.utc)}] 🎯 Grading {len(all_tickers)} tickers...")
-    
-    graded = 0
-    errors = 0
-    
-    for ticker, info in all_tickers.items():
-        try:
-            # Get base grade from engine (technical + fundamental)
-            base_result = calculate_grade(ticker)
-            
-            # Get sector
-            sector = base_result.sector or info['data'].get('sector', 'Technology')
-            
-            # Get layer scores
-            layer_scores = get_layer_scores(ticker, sector, macro_signals, sector_momentum, weather_patterns)
-            
-            # Calculate integrated grade with layer weights
-            # Technical: 25%, Fundamental: 25%, Macro: 15%, Sector: 15%, Weather: 10%, Sentiment: 10%
-            integrated_grade = int(
-                base_result.technical_score * 0.25 +
-                base_result.fundamental_score * 0.25 +
-                layer_scores['macro_score'] * 0.15 +
-                layer_scores['sector_score'] * 0.15 +
-                layer_scores['weather_score'] * 0.10 +
-                base_result.sentiment_score * 0.10
-            )
-            
-            # Determine council
-            from grading.engine import grade_to_council
-            council = grade_to_council(integrated_grade)
-            
-            # Update position
-            if info['type'] == 'position':
-                update_position(ticker, {
-                    'grade': integrated_grade,
-                    'council': council,
-                    'sector': sector
-                })
-            
-            # Save detailed grade
-            save_vox_grade({
-                'ticker': ticker,
-                'name': base_result.name or ticker,
-                'vox_grade': integrated_grade,
-                'previous_grade': info['data'].get('grade', 0) or 0,
-                'action': council,
-                'current_price': float(info['data'].get('live_price', 0)),
-                'stop_loss': float(info['data'].get('live_price', 0)) * 0.85 if info['data'].get('live_price') else 0,
-                'entry_point': float(info['data'].get('live_price', 0)) * 0.95 if info['data'].get('live_price') else 0,
-                'position_value': float(info['data'].get('live_value', 0)),
-                'shares': float(info['data'].get('shares', 0)),
-                'technical_score': base_result.technical_score,
-                'fundamental_score': base_result.fundamental_score,
-                'macro_score': layer_scores['macro_score'],
-                'sector_score': layer_scores['sector_score'],
-                'weather_score': layer_scores['weather_score'],
-                'sentiment_score': base_result.sentiment_score,
-                'catalysts': '; '.join(base_result.factors.get('technical', {}).get('mean_reversion_signals', [])[:3]),
-                'weather_factors': '; '.join(layer_scores['macro_reasoning'][:2]) or 'Neutral macro environment'
-            })
-            
-            graded += 1
-            if graded % 50 == 0:
-                print(f"[{datetime.now(timezone.utc)}]   Progress: {graded}/{len(all_tickers)}")
-            
-        except Exception as e:
-            print(f"[{datetime.now(timezone.utc)}]   ❌ {ticker}: {e}")
-            errors += 1
-    
-    print(f"[{datetime.now(timezone.utc)}] ✅ Graded: {graded} | ❌ Errors: {errors}")
-    return {'graded': graded, 'errors': errors}
+
+    tickers = list(all_tickers.keys())
+    results = batch_vox_grade(tickers, macro_signals, sector_momentum, weather_patterns)
+
+    # Step 3: Push to DB
+    print(f"[{datetime.now(timezone.utc)}] 💾 Saving {len(results)} grades to PostgreSQL...")
+    updated_positions = 0
+    updated_watchlist = 0
+    saved_grades = 0
+
+    for r in results:
+        info = all_tickers[r.ticker]
+        update_data = {
+            "grade": r.overall_grade,
+            "council": r.council,
+            "sector": r.sector or info["data"].get("sector", ""),
+        }
+
+        if info["type"] == "position":
+            update_position(r.ticker, update_data)
+            updated_positions += 1
+        else:
+            existing = info["data"]
+            upsert_data = {
+                "ticker": r.ticker,
+                "name": r.name or existing.get("name", r.ticker),
+                "sector": r.sector or existing.get("sector", ""),
+                "thesis": existing.get("thesis", ""),
+                "entry_price": existing.get("entry_price", 0),
+                "target_price": existing.get("target_price", 0),
+                "stop_loss": existing.get("stop_loss", 0),
+                "grade": r.overall_grade,
+                "council": r.council,
+                "status": existing.get("status", "active"),
+                "notes": existing.get("notes", ""),
+            }
+            upsert_watchlist(upsert_data)
+            updated_watchlist += 1
+
+        save_vox_grade({
+            "ticker": r.ticker,
+            "name": r.name or r.ticker,
+            "vox_grade": r.overall_grade,
+            "previous_grade": info["data"].get("grade", 0) or 0,
+            "action": r.council,
+            "current_price": float(info["data"].get("live_price", 0) or 0),
+            "stop_loss": float(info["data"].get("live_price", 0) or 0) * 0.85 if info["data"].get("live_price") else 0,
+            "entry_point": float(info["data"].get("live_price", 0) or 0) * 0.95 if info["data"].get("live_price") else 0,
+            "position_value": float(info["data"].get("live_value", 0) or 0),
+            "shares": float(info["data"].get("shares", 0) or 0),
+            "technical_score": r.technical_score,
+            "fundamental_score": r.fundamental_score,
+            "macro_score": r.macro_score,
+            "sector_score": r.sector_score,
+            "weather_score": r.weather_score,
+            "sentiment_score": r.sentiment_score,
+            "catalysts": "; ".join(r.factors.get("technical", {}).get("mean_reversion_signals", [])[:3]) or "None",
+            "weather_factors": f"Macro: {len(macro_signals)} signals; Weather: {len(weather_patterns)} patterns",
+        })
+        saved_grades += 1
+
+    print(f"[{datetime.now(timezone.utc)}] ✅ Updated {updated_positions} positions, {updated_watchlist} watchlist, {saved_grades} grades")
+
+    # Print top/bottom
+    results.sort(key=lambda x: -x.overall_grade)
+    print(f"\n[{datetime.now(timezone.utc)}] 🏆 TOP 10:")
+    for r in results[:10]:
+        print(f"   {r.ticker:8s} {r.overall_grade:3d} {r.council:12s} T={r.technical_score} F={r.fundamental_score} M={r.macro_score} S={r.sector_score} W={r.weather_score} Se={r.sentiment_score}")
+    print(f"[{datetime.now(timezone.utc)}] ⚠️ BOTTOM 10:")
+    for r in results[-10:]:
+        print(f"   {r.ticker:8s} {r.overall_grade:3d} {r.council:12s} T={r.technical_score} F={r.fundamental_score} M={r.macro_score} S={r.sector_score} W={r.weather_score} Se={r.sentiment_score}")
+
+    return {"graded": len(results), "positions": updated_positions, "watchlist": updated_watchlist}
 
 
 def sync_etoro():
@@ -273,17 +246,17 @@ def daily_job():
 
 
 if __name__ == "__main__":
-    print(f"[{datetime.now(timezone.utc)}] 🚀 VOX 6-Layer Grader starting...")
+    print(f"[{datetime.now(timezone.utc)}] 🚀 VOX 6-Layer Grader v2 starting...")
     print(f"[{datetime.now(timezone.utc)}] Data: {os.listdir('/app/data') if os.path.exists('/app/data') else 'NO DATA'}")
-    
+
     # Schedule daily at 7:30 AM CT (13:30 UTC)
     schedule.every().day.at("13:30").do(daily_job)
-    
+
     # Also run immediately on startup
     daily_job()
-    
+
     print(f"[{datetime.now(timezone.utc)}] ⏰ Scheduled for 13:30 UTC daily")
-    
+
     while True:
         schedule.run_pending()
         time.sleep(60)

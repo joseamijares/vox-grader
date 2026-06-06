@@ -53,20 +53,34 @@ def calculate_grade(ticker: str, use_fundamental: bool = True) -> GradeResult:
         name = ticker
         sector = ""
     
-    # Placeholder for sentiment and momentum (Phase 2)
-    sentiment_score = 50
-    momentum_score = 50
+    # Momentum score from technical module (12-month momentum if available)
+    momentum_score = tech.get("momentum_score", 50)
     
-    # Risk score (placeholder — would use volatility)
-    risk_score = 50
+    # Risk score from volatility (inverse of std20 annualized)
+    vol_annual = tech.get("volatility_annual", 0.20)
+    if vol_annual <= 0.15:
+        risk_score = 80
+    elif vol_annual <= 0.25:
+        risk_score = 65
+    elif vol_annual <= 0.40:
+        risk_score = 50
+    elif vol_annual <= 0.60:
+        risk_score = 35
+    else:
+        risk_score = 20
     
-    # Weighted average
+    # Sentiment placeholder — will be overridden by integrated grader's sentiment layer
+    sentiment_score = tech.get("sentiment_score", 50)
+    
+    # Weighted average — 6-layer VOX weights
+    # Technical 25%, Fundamental 25%, Macro 15%, Sector 15%, Weather 10%, Sentiment 10%
+    # When called standalone (no macro/sector/weather), approximate with:
     overall = int(
         technical_score * 0.30 +
         fundamental_score * 0.30 +
-        sentiment_score * 0.15 +
         momentum_score * 0.15 +
-        risk_score * 0.10
+        risk_score * 0.15 +
+        sentiment_score * 0.10
     )
     
     # Determine council signal

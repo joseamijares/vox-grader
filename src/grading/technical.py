@@ -1122,6 +1122,32 @@ def score_technical(ticker: str, use_alpha_zoo: bool = True) -> Dict:
         if rsi > 75:
             mean_reversion_signals.append("RSI_OVERBOUGHT")
     
+    # ── Momentum & volatility metrics for engine ──
+    momentum_score = 50
+    volatility_annual = 0.20
+    if alpha_factors:
+        # Try 12m academic momentum first, then 6m, then 60-day beta
+        mom12m = alpha_factors.get("acad_mom12m")
+        mom6m = alpha_factors.get("acad_mom6m")
+        beta60 = alpha_factors.get("qlib_beta60")
+        mom = mom12m if mom12m is not None else (mom6m if mom6m is not None else beta60)
+        if mom is not None:
+            if mom > 0.5:
+                momentum_score = 85
+            elif mom > 0.2:
+                momentum_score = 70
+            elif mom > 0.05:
+                momentum_score = 55
+            elif mom > -0.05:
+                momentum_score = 50
+            elif mom > -0.2:
+                momentum_score = 40
+            else:
+                momentum_score = 25
+        std20 = alpha_factors.get("qlib_std20")
+        if std20 is not None:
+            volatility_annual = std20 * np.sqrt(252)
+    
     # ── Combined scoring ──
     if alpha_factors:
         score = int(
@@ -1144,6 +1170,8 @@ def score_technical(ticker: str, use_alpha_zoo: bool = True) -> Dict:
         "alpha_zoo_score": alpha_score if alpha_factors else None,
         "alpha_factor_count": len(alpha_factors),
         "mean_reversion_signals": mean_reversion_signals if mean_reversion_signals else [],
+        "momentum_score": momentum_score,
+        "volatility_annual": round(volatility_annual, 4),
     }
     
     if alpha_factors:

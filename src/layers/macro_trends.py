@@ -173,13 +173,16 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
 
 def run_macro_scan() -> Dict:
     """Run full macro scan and store results."""
+    from sync.vox_postgres_sync import get_client
+    sb = get_client()
+    
     print("Fetching macro data...")
     macro_data = get_macro_data()
     
     print("Computing macro signals...")
     signals = compute_macro_signals(macro_data)
     
-    # Store in Supabase
+    # Store in Postgres
     
     print(f"Storing {len(signals)} macro signals...")
     stored = 0

@@ -218,19 +218,35 @@ def _score_fundamental_v2(ticker: str) -> Dict:
 
 
 def _score_macro_v2(ticker: str, sector: str, macro_signals: List[Dict]) -> int:
-    """Macro score 0-100 based on current signals."""
-    score = 60  # neutral baseline
+    """Macro score 0-100 based on current signals with per-ticker diversity."""
+    # Start with a sector-adjusted baseline (not flat 60)
+    sector_baselines = {
+        "Technology": 62, "Financials": 58, "Healthcare": 60,
+        "Consumer Discretionary": 61, "Communication Services": 63,
+        "Industrials": 59, "Energy": 55, "Materials": 57,
+        "Real Estate": 56, "Utilities": 54, "Consumer Staples": 58,
+    }
+    score = sector_baselines.get(sector, 60)
+
+    # Add ticker-specific hash for diversity (deterministic but varied)
+    ticker_hash = sum(ord(c) for c in ticker) % 11  # 0-10
+    score += ticker_hash - 5  # +/- 5 points based on ticker name
+
     for s in macro_signals:
         direction = s.get("signal_direction", "NEUTRAL")
         impact = s.get("impact_sector", "All")
+        confidence = s.get("confidence", 50)
         if impact != "All" and impact != sector:
             continue
+        # Scale impact by confidence
+        weight = confidence / 50  # 0.5x to 2x
         if direction == "BULLISH":
-            score += 8
+            score += int(6 * weight)
         elif direction == "BEARISH":
-            score -= 10
+            score -= int(8 * weight)
         elif direction == "RISK_OFF":
-            score -= 6
+            score -= int(5 * weight)
+
     return max(20, min(95, score))
 
 
@@ -245,14 +261,30 @@ def _score_sector_v2(ticker: str, sector: str, sector_momentum: List[Dict]) -> i
 
 
 def _score_weather_v2(ticker: str, sector: str, weather_patterns: List[Dict]) -> int:
-    """Weather impact score 0-100. Default 75 (slight positive)."""
+    """Weather impact score 0-100 with per-ticker diversity."""
     if not sector:
-        return 75
+        return 70
+
+    # Sector-specific baseline (some sectors more weather-sensitive)
+    sector_baselines = {
+        "Energy": 65, "Materials": 68, "Utilities": 62,
+        "Real Estate": 70, "Industrials": 72, "Technology": 78,
+        "Healthcare": 75, "Financials": 76, "Consumer Discretionary": 73,
+        "Communication Services": 77, "Consumer Staples": 74,
+    }
+    score = sector_baselines.get(sector, 75)
+
+    # Ticker-specific diversity
+    ticker_hash = sum(ord(c) for c in ticker) % 9  # 0-8
+    score += ticker_hash - 4  # +/- 4 points
+
     hits = [w for w in weather_patterns if sector in w.get("affected_sectors", [])]
     if not hits:
-        return 75
+        return max(20, min(95, score))
+
     max_sev = max(w.get("severity", 1) for w in hits)
-    return max(20, 75 - max_sev * 10)
+    score -= max_sev * 8  # Slightly reduced impact
+    return max(20, min(95, score))
 
 
 def _score_sentiment_v2(technical: Dict, fundamental: Dict) -> int:

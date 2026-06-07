@@ -124,7 +124,14 @@ def get_stock_data(ticker: str, period: str = "1y") -> Optional[pd.DataFrame]:
     try:
         stock = yf.Ticker(ticker)
         df = stock.history(period=period)
-        return df if not df.empty else None
+        if df.empty or len(df) < 5:
+            return None
+        # Check for delisted/no data - use pandas isna check
+        import pandas as pd
+        close_series = df["Close"]
+        if isinstance(close_series, pd.Series) and close_series.isna().all():
+            return None
+        return df
     except Exception:
         return None
 

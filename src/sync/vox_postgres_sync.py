@@ -17,7 +17,28 @@ from contextlib import contextmanager
 
 def _get_conn_kwargs():
     """Build connection kwargs from env (Railway-style or local)."""
+    # Check for local dev env file first
+    env_path = os.path.expanduser("~/.hermes/.env")
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                if '=' in line and not line.startswith('#'):
+                    k, v = line.strip().split('=', 1)
+                    os.environ.setdefault(k, v)
+
     # Prefer individual env vars (Railway sets these reliably)
+    # Map DB_* vars to PG* if present (local dev convention)
+    if os.environ.get("DB_HOST") and not os.environ.get("PGHOST"):
+        os.environ["PGHOST"] = os.environ["DB_HOST"]
+    if os.environ.get("DB_PORT") and not os.environ.get("PGPORT"):
+        os.environ["PGPORT"] = os.environ["DB_PORT"]
+    if os.environ.get("DB_USER") and not os.environ.get("PGUSER"):
+        os.environ["PGUSER"] = os.environ["DB_USER"]
+    if os.environ.get("DB_PASSWORD") and not os.environ.get("PGPASSWORD"):
+        os.environ["PGPASSWORD"] = os.environ["DB_PASSWORD"]
+    if os.environ.get("DB_NAME") and not os.environ.get("PGDATABASE"):
+        os.environ["PGDATABASE"] = os.environ["DB_NAME"]
+
     password = os.environ.get("PGPASSWORD", "")
     if password:
         return {
@@ -477,6 +498,44 @@ class _FakeSupabase:
 def get_client():
     """Return a fake Supabase client that routes to PostgreSQL."""
     return _FakeSupabase()
+
+
+# -- Sentiment Scores ---------------------------------------------------------
+
+def get_sentiment_scores(ticker: str = None, limit: int = 100):
+    """Get sentiment scores. If ticker provided, returns latest for that ticker."""
+    with _get_cursor() as cur:
+        if ticker:
+            cur.execute(
+                "SELECT * FROM sentiment_scores WHERE ticker = %s ORDER BY computed_at DESC LIMIT 1",
+                (ticker,)
+            )
+            return cur.fetchone()
+        else:
+            cur.execute(
+                "SELECT DISTINCT ON (ticker) * FROM sentiment_scores ORDER BY ticker, computed_at DESC LIMIT %s",
+                (limit,)
+            )
+            return cur.fetchall()
+
+
+def save_sentiment_score(record: dict):
+    """Insert a sentiment score record."""
+    sql = """
+    INSERT INTO sentiment_scores 
+    (ticker, vox_score, raw_score, mention_count, article_count,
+     bullish_count, somewhat_bullish_count, neutral_count, 
+     somewhat_bearish_count, bearish_count, bullish_ratio, 
+     top_headlines, data_freshness_hours, source, computed_at)
+    VALUES 
+    (%(ticker)s, %(vox_score)s, %(raw_score)s, %(mention_count)s, %(article_count)s,
+     %(bullish_count)s, %(somewhat_bullish_count)s, %(neutral_count)s,
+     %(somewhat_bearish_count)s, %(bearish_count)s, %(bullish_ratio)s,
+     %(top_headlines)s, %(data_freshness_hours)s, %(source)s, %(computed_at)s)
+    """
+    record.setdefault("computed_at", _now_iso())
+    with _get_cursor() as cur:
+        cur.execute(sql, record)
 
 
 # -- Test ----------------------------------------------------------------------

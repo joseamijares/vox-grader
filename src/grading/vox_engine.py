@@ -251,13 +251,26 @@ def _score_macro_v2(ticker: str, sector: str, macro_signals: List[Dict]) -> int:
 
 
 def _score_sector_v2(ticker: str, sector: str, sector_momentum: List[Dict]) -> int:
-    """Sector momentum score 0-100."""
+    """Sector momentum score 0-100 with relative ranking."""
     if not sector or sector == "Uncategorized":
+        return 45
+    if not sector_momentum:
         return 50
+    
+    # Find this sector's data
     sm = next((s for s in sector_momentum if s.get("sector") == sector), None)
     if sm:
+        # Compute relative ranking across all sectors
+        sorted_sectors = sorted(sector_momentum, key=lambda s: s.get("momentum_score", 50), reverse=True)
+        n = len(sorted_sectors)
+        rank = next((i for i, s in enumerate(sorted_sectors) if s.get("sector") == sector), n // 2)
+        # Map rank to score: top = 95, bottom = 20
+        if n > 1:
+            return int(95 - (rank / (n - 1)) * 75)
         return max(20, min(95, sm.get("momentum_score", 50)))
-    return 50
+    
+    # Sector known but not in momentum data
+    return 45
 
 
 def _score_weather_v2(ticker: str, sector: str, weather_patterns: List[Dict]) -> int:
@@ -287,8 +300,31 @@ def _score_weather_v2(ticker: str, sector: str, weather_patterns: List[Dict]) ->
     return max(20, min(95, score))
 
 
-def _score_sentiment_v2(technical: Dict, fundamental: Dict) -> int:
-    """Sentiment proxy from momentum + volume + relative strength."""
+def _score_sentiment_v2(technical: Dict, fundamental: Dict, ticker: str = None,
+                        use_real_sentiment: bool = True) -> int:
+    """Sentiment score — uses real news sentiment from Alpha Vantage if available,
+    falls back to synthetic proxy (momentum + volume + relative strength).
+    
+    Args:
+        technical: Technical analysis results dict
+        fundamental: Fundamental analysis results dict  
+        ticker: Stock ticker symbol (required for real sentiment fetch)
+        use_real_sentiment: Whether to attempt Alpha Vantage news sentiment
+    
+    Returns:
+        int: 0-100 sentiment score
+    """
+    # Try real sentiment first
+    if use_real_sentiment and ticker:
+        try:
+            from layers.sentiment import score_sentiment_for_vox
+            real_score = score_sentiment_for_vox(ticker, fallback_to_synthetic=False)
+            if real_score != 50:  # 50 means no data or fallback
+                return real_score
+        except Exception:
+            pass  # Fall through to synthetic
+    
+    # Synthetic fallback — momentum + volume + relative strength proxy
     scores = []
     if technical.get("macd_bullish"):
         scores.append(65)
@@ -317,8 +353,18 @@ def calculate_vox_grade(
     """Calculate full 6-layer VOX grade for a ticker."""
 
     macro_signals = macro_signals or []
-    sector_momentum = sector_momentum or []
     weather_patterns = weather_patterns or []
+
+    # Auto-fetch sector_momentum from DB if not provided
+    if sector_momentum is None:
+        try:
+            from sync.vox_postgres_sync import get_sector_momentum as _get_sm
+            sm_rows = _get_sm()
+            sector_momentum = [dict(r) for r in sm_rows] if sm_rows else []
+        except Exception:
+            sector_momentum = []
+    else:
+        sector_momentum = sector_momentum or []
 
     tech = _score_technical_v2(ticker)
     fund = _score_fundamental_v2(ticker)
@@ -328,7 +374,7 @@ def calculate_vox_grade(
     macro = _score_macro_v2(ticker, sector, macro_signals)
     sec = _score_sector_v2(ticker, sector, sector_momentum)
     weather = _score_weather_v2(ticker, sector, weather_patterns)
-    sentiment = _score_sentiment_v2(tech, fund)
+    sentiment = _score_sentiment_v2(tech, fund, ticker=ticker)
 
     overall = int(
         tech["score"] * 0.25 +

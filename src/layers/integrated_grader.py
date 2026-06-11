@@ -125,11 +125,27 @@ def get_layer_scores(ticker: str, sector: str,
                 macro_reasoning.append(f"Bearish macro: {signal['signal_name']}")
     macro_score = max(0, min(100, macro_score))
     
-    # Sector score (0-100)
+    # Sector score (0-100) — compute relative ranking vs all sectors
     sector_score = 50
-    sector_data = next((s for s in sector_momentum if s['sector'] == sector), None)
-    if sector_data:
-        sector_score = sector_data.get('momentum_score', 50)
+    if sector_momentum:
+        # Rank sectors by momentum_score and assign relative score 20-95
+        sorted_sectors = sorted(sector_momentum, key=lambda s: s.get('momentum_score', 50), reverse=True)
+        n = len(sorted_sectors)
+        sector_data = next((s for s in sector_momentum if s.get('sector') == sector), None)
+        if sector_data:
+            # Find rank position (0 = best)
+            rank = next((i for i, s in enumerate(sorted_sectors) if s.get('sector') == sector), n // 2)
+            # Map rank to score: top sector = 95, bottom = 20
+            if n > 1:
+                sector_score = int(95 - (rank / (n - 1)) * 75)
+            else:
+                sector_score = sector_data.get('momentum_score', 50)
+        elif sector and sector != "Uncategorized":
+            # Sector not in momentum data — use neutral with slight penalty
+            sector_score = 45
+    else:
+        # No sector momentum data available — neutral
+        sector_score = 50
     
     # Weather score (0-100, default 70 = neutral/slight positive)
     weather_score = 70

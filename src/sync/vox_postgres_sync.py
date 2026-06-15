@@ -224,6 +224,13 @@ def get_alerts():
 # -- VOX Grades ---------------------------------------------------------------
 
 def save_vox_grade(record: dict):
+    # Convert numpy types to native Python types
+    for key, value in record.items():
+        if hasattr(value, 'item'):  # numpy scalar
+            record[key] = value.item()
+        elif isinstance(value, (list, tuple)):
+            record[key] = [v.item() if hasattr(v, 'item') else v for v in value]
+    
     sql = """
     INSERT INTO vox_grades (
         ticker, name, vox_grade, previous_grade, action, current_price, stop_loss,

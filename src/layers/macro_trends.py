@@ -67,11 +67,11 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
     
     # Yield curve (10Y - 2Y proxy using 10Y - 5Y)
     if 'TNX' in macro_data and 'FVX' in macro_data:
-        spread = macro_data['TNX']['price'] - macro_data['FVX']['price']
+        spread = float(macro_data['TNX']['price']) - float(macro_data['FVX']['price'])
         if spread < 0:
             signals.append({
                 'signal_name': 'YIELD_CURVE_INVERTED',
-                'signal_value': round(spread, 2),
+                'signal_value': round(float(spread), 2),
                 'signal_direction': 'BEARISH',
                 'impact_sector': 'Financials',
                 'confidence': 75,
@@ -80,7 +80,7 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
         else:
             signals.append({
                 'signal_name': 'YIELD_CURVE_NORMAL',
-                'signal_value': round(spread, 2),
+                'signal_value': round(float(spread), 2),
                 'signal_direction': 'BULLISH',
                 'impact_sector': 'Financials',
                 'confidence': 60,
@@ -89,11 +89,11 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
     
     # VIX regime
     if 'VIX' in macro_data:
-        vix = macro_data['VIX']['price']
+        vix = float(macro_data['VIX']['price'])
         if vix > 30:
             signals.append({
                 'signal_name': 'VIX_HIGH',
-                'signal_value': vix,
+                'signal_value': float(vix),
                 'signal_direction': 'BEARISH',
                 'impact_sector': 'All',
                 'confidence': 80,
@@ -102,7 +102,7 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
         elif vix < 15:
             signals.append({
                 'signal_name': 'VIX_LOW',
-                'signal_value': vix,
+                'signal_value': float(vix),
                 'signal_direction': 'BULLISH',
                 'impact_sector': 'All',
                 'confidence': 65,
@@ -111,12 +111,12 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
     
     # Dollar strength
     if 'DXY' in macro_data:
-        dxy = macro_data['DXY']['price']
-        dxy_5d = macro_data['DXY'].get('change_5d_pct', 0)
+        dxy = float(macro_data['DXY']['price'])
+        dxy_5d = float(macro_data['DXY'].get('change_5d_pct', 0))
         if dxy_5d > 1:
             signals.append({
                 'signal_name': 'DOLLAR_STRENGTHENING',
-                'signal_value': dxy,
+                'signal_value': float(dxy),
                 'signal_direction': 'BEARISH',
                 'impact_sector': 'Emerging Markets',
                 'confidence': 70,
@@ -125,7 +125,7 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
         elif dxy_5d < -1:
             signals.append({
                 'signal_name': 'DOLLAR_WEAKENING',
-                'signal_value': dxy,
+                'signal_value': float(dxy),
                 'signal_direction': 'BULLISH',
                 'impact_sector': 'Emerging Markets',
                 'confidence': 70,
@@ -134,38 +134,38 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
     
     # Oil prices
     if 'OIL' in macro_data:
-        oil = macro_data['OIL']['price']
+        oil = float(macro_data['OIL']['price'])
         if oil > 85:
             signals.append({
                 'signal_name': 'OIL_HIGH',
-                'signal_value': oil,
+                'signal_value': float(oil),
                 'signal_direction': 'BEARISH',
-                'impact_sector': 'Consumer Discretionary',
+                'impact_sector': 'Energy',
                 'confidence': 65,
-                'source': 'WTI Crude'
+                'source': 'Oil'
             })
-        elif oil < 60:
+        elif oil < 65:
             signals.append({
                 'signal_name': 'OIL_LOW',
-                'signal_value': oil,
+                'signal_value': float(oil),
                 'signal_direction': 'BULLISH',
-                'impact_sector': 'Consumer Discretionary',
+                'impact_sector': 'Energy',
                 'confidence': 60,
-                'source': 'WTI Crude'
+                'source': 'Oil'
             })
     
     # Gold as safe haven
-    if 'GOLD' in macro_data:
-        gold = macro_data['GOLD']['price']
-        gold_5d = macro_data['GOLD'].get('change_5d_pct', 0)
-        if gold_5d > 3:
+    if 'GLD' in macro_data:
+        gld = float(macro_data['GLD']['price'])
+        gld_5d = float(macro_data['GLD'].get('change_5d_pct', 0))
+        if gld_5d > 2:
             signals.append({
                 'signal_name': 'GOLD_RALLY',
-                'signal_value': gold,
-                'signal_direction': 'RISK_OFF',
+                'signal_value': float(gld),
+                'signal_direction': 'NEUTRAL',
                 'impact_sector': 'All',
-                'confidence': 60,
-                'source': 'Gold futures'
+                'confidence': 55,
+                'source': 'Gold'
             })
     
     return signals

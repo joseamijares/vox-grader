@@ -34,13 +34,29 @@ GRADE_COLORS = {
 @st.cache_data(ttl=300)
 def load_portfolio_data():
     """Load portfolio data from PostgreSQL"""
-    conn = psycopg2.connect(
-        host='acela.proxy.rlwy.net',
-        port=35577,
-        database='railway',
-        user='postgres',
-        password=os.environ['DB_PASSWORD']
-    )
+    # Use internal Railway database URL if available, otherwise fallback to external
+    db_url = os.environ.get('DATABASE_URL')
+    
+    if db_url:
+        # Parse the DATABASE_URL
+        import urllib.parse
+        parsed = urllib.parse.urlparse(db_url)
+        conn = psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port or 5432,
+            database=parsed.path[1:],  # Remove leading slash
+            user=parsed.username,
+            password=parsed.password
+        )
+    else:
+        # Fallback to external connection (for local development)
+        conn = psycopg2.connect(
+            host='acela.proxy.rlwy.net',
+            port=35577,
+            database='railway',
+            user='postgres',
+            password=os.environ['DB_PASSWORD']
+        )
     
     cur = conn.cursor()
     

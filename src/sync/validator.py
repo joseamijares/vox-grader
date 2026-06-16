@@ -70,7 +70,7 @@ def validate_position(ticker: str, value: float, broker: str) -> Dict:
     if broker in ['eToro', 'GBM Main', 'GBM USA', 'IBKR', 'Schwab']:
         if not is_valid_stock_ticker(ticker):
             # Allow some exceptions for known valid tickers
-            known_valid = {'GBM O', 'NAFTRAC', 'NAFTRAC ISHRS', '0700.HK'}
+            known_valid = {'GBM O', 'NAFTRAC', '0700.HK'}
             if ticker not in known_valid:
                 result['valid'] = False
                 result['reason'] = f'Invalid stock ticker: {ticker}'

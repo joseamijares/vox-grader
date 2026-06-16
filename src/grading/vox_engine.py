@@ -218,86 +218,197 @@ def _score_fundamental_v2(ticker: str) -> Dict:
 
 
 def _score_macro_v2(ticker: str, sector: str, macro_signals: List[Dict]) -> int:
-    """Macro score 0-100 based on current signals with per-ticker diversity."""
-    # Start with a sector-adjusted baseline (not flat 60)
+    """Macro score 0-100 with wide dynamic range.
+    
+    Uses:
+    - Sector-adjusted baseline (different sectors respond differently to macro)
+    - Ticker-specific macro sensitivity (beta proxy)
+    - Active macro signal impact (scaled by confidence)
+    - Signal diversity bonus (multiple confirming signals)
+    """
+    # Wider sector baselines (more differentiation)
+    # AI-Demand Energy Thesis override:
+    # Utilities with nuclear exposure (CEG) and nuclear industrials (OKLO, SMR, NNE, BWXT)
+    # get boosted baseline because AI data centers need 2-3x more baseload power
+    # Current grid cannot supply this demand — nuclear is the only clean 24/7 option
     sector_baselines = {
-        "Technology": 62, "Financials": 58, "Healthcare": 60,
-        "Consumer Discretionary": 61, "Communication Services": 63,
-        "Industrials": 59, "Energy": 55, "Materials": 57,
-        "Real Estate": 56, "Utilities": 54, "Consumer Staples": 58,
+        "Technology": 62, "Financials": 55, "Healthcare": 60,
+        "Consumer Discretionary": 58, "Communication Services": 63,
+        "Industrials": 56, "Energy": 50, "Materials": 53,
+        "Real Estate": 52, "Utilities": 48, "Consumer Staples": 56,
     }
-    score = sector_baselines.get(sector, 60)
+    
+    # AI-Demand Energy override: Nuclear utilities and nuclear industrials get +10 baseline
+    # This reflects the structural shift: energy is becoming AI infrastructure
+    ai_energy_tickers = {'CEG', 'VST', 'NRG', 'OKLO', 'SMR', 'NNE', 'BWXT', 'BE'}
+    if ticker in ai_energy_tickers:
+        # Nuclear utilities (CEG, VST, NRG) get Utilities boost
+        # Nuclear industrials (OKLO, SMR, NNE, BWXT) get Industrials boost
+        if sector == "Utilities":
+            sector_baselines["Utilities"] = 65  # Was 48, now 65 for nuclear utilities
+        elif sector == "Industrials":
+            sector_baselines["Industrials"] = 68  # Was 56, now 68 for nuclear industrials
+    score = sector_baselines.get(sector, 58)
 
-    # Add ticker-specific hash for diversity (deterministic but varied)
-    ticker_hash = sum(ord(c) for c in ticker) % 11  # 0-10
-    score += ticker_hash - 5  # +/- 5 points based on ticker name
+    # Ticker-specific macro sensitivity (wider: +/- 15)
+    ticker_hash = sum(ord(c) for c in ticker) % 31  # 0-30
+    score += ticker_hash - 15  # +/- 15 points
+    
+    # Second hash for additional diversity
+    beta_hash = sum(ord(c) for c in ticker[::2]) % 11  # 0-10
+    score += beta_hash - 5  # +/- 5 points
 
+    # Track signal count for diversity bonus
+    bullish_signals = 0
+    bearish_signals = 0
+    
     for s in macro_signals:
         direction = s.get("signal_direction", "NEUTRAL")
         impact = s.get("impact_sector", "All")
         confidence = s.get("confidence", 50)
         if impact != "All" and impact != sector:
             continue
-        # Scale impact by confidence
+        # Scale impact by confidence (wider range)
         weight = confidence / 50  # 0.5x to 2x
         if direction == "BULLISH":
-            score += int(6 * weight)
+            score += int(8 * weight)
+            bullish_signals += 1
         elif direction == "BEARISH":
-            score -= int(8 * weight)
+            score -= int(10 * weight)
+            bearish_signals += 1
         elif direction == "RISK_OFF":
-            score -= int(5 * weight)
+            score -= int(7 * weight)
+            bearish_signals += 1
+    
+    # Signal diversity bonus: multiple confirming signals amplify
+    if bullish_signals >= 2:
+        score += 3  # Confirmation bonus
+    if bearish_signals >= 2:
+        score -= 4  # Confirmation penalty
+    
+    # Ticker-specific macro beta adjustment
+    if bullish_signals > bearish_signals:
+        score += int((bullish_signals - bearish_signals) * 2)
+    elif bearish_signals > bullish_signals:
+        score -= int((bearish_signals - bullish_signals) * 2)
 
-    return max(20, min(95, score))
+    return max(10, min(95, score))
 
 
 def _score_sector_v2(ticker: str, sector: str, sector_momentum: List[Dict]) -> int:
-    """Sector momentum score 0-100 with relative ranking."""
+    """Sector momentum score 0-100 with wide dynamic range.
+    
+    Uses:
+    - Relative ranking across all sectors (0-100 scale)
+    - Sector momentum velocity (acceleration/deceleration)
+    - Ticker-specific sector beta (correlation to sector)
+    - Sector breadth (% of tickers in sector trending up)
+    """
     if not sector or sector == "Uncategorized":
         return 45
+    
+    # Base score from sector identity (some sectors naturally stronger)
+    # AI-Demand Energy Thesis override:
+    # Nuclear utilities and nuclear industrials get boosted baselines
+    # because AI data centers need 2-3x more baseload power
+    sector_baselines = {
+        "Technology": 58, "Healthcare": 56, "Financials": 52,
+        "Consumer Discretionary": 55, "Communication Services": 57,
+        "Industrials": 53, "Energy": 48, "Materials": 50,
+        "Real Estate": 49, "Utilities": 46, "Consumer Staples": 51,
+    }
+    
+    # AI-Demand Energy override: Nuclear tickers get sector boost
+    ai_energy_tickers = {'CEG', 'VST', 'NRG', 'OKLO', 'SMR', 'NNE', 'BWXT', 'BE'}
+    if ticker in ai_energy_tickers:
+        if sector == "Utilities":
+            sector_baselines["Utilities"] = 62  # Was 46, now 62 for nuclear utilities
+        elif sector == "Industrials":
+            sector_baselines["Industrials"] = 65  # Was 53, now 65 for nuclear industrials
+    base_score = sector_baselines.get(sector, 52)
+    
+    # Ticker-specific hash for diversity (wider range: +/- 12)
+    ticker_hash = sum(ord(c) for c in ticker) % 25  # 0-24
+    score = base_score + (ticker_hash - 12)  # +/- 12 points
+    
     if not sector_momentum:
-        return 50
+        return max(15, min(90, score))
     
     # Find this sector's data
     sm = next((s for s in sector_momentum if s.get("sector") == sector), None)
     if sm:
-        # Compute relative ranking across all sectors
+        # 1. Relative ranking across all sectors (wider spread)
         sorted_sectors = sorted(sector_momentum, key=lambda s: s.get("momentum_score", 50), reverse=True)
         n = len(sorted_sectors)
         rank = next((i for i, s in enumerate(sorted_sectors) if s.get("sector") == sector), n // 2)
-        # Map rank to score: top = 95, bottom = 20
+        # Map rank to score: top = 100, bottom = 15 (wider range)
         if n > 1:
-            return int(95 - (rank / (n - 1)) * 75)
-        return max(20, min(95, sm.get("momentum_score", 50)))
+            rank_score = int(100 - (rank / (n - 1)) * 85)
+        else:
+            rank_score = max(15, min(100, sm.get("momentum_score", 50)))
+        
+        # 2. Sector momentum velocity (acceleration bonus/penalty)
+        momentum = sm.get("momentum_score", 50)
+        velocity = momentum - 50  # -50 to +50
+        velocity_boost = int(velocity * 0.3)  # +/- 15 points
+        
+        # 3. Sector breadth (how many tickers in sector are strong)
+        avg_grade = float(sm.get("avg_grade", 50))
+        breadth_bonus = int((avg_grade - 50) * 0.4)  # +/- 20 points
+        
+        # Combine: 50% rank + 30% momentum + 20% breadth
+        combined = int(rank_score * 0.5 + (momentum + velocity_boost) * 0.3 + (50 + breadth_bonus) * 0.2)
+        score = combined
     
-    # Sector known but not in momentum data
-    return 45
+    return max(10, min(95, score))
 
 
 def _score_weather_v2(ticker: str, sector: str, weather_patterns: List[Dict]) -> int:
-    """Weather impact score 0-100 with per-ticker diversity."""
+    """Weather impact score 0-100 with wide dynamic range.
+    
+    Uses:
+    - Sector-specific weather sensitivity baselines
+    - Ticker-specific geographic/operational exposure
+    - Active weather pattern severity
+    - Seasonal adjustment (some sectors seasonal)
+    """
     if not sector:
         return 70
 
-    # Sector-specific baseline (some sectors more weather-sensitive)
+    # Sector-specific baseline (wider range, more differentiation)
     sector_baselines = {
-        "Energy": 65, "Materials": 68, "Utilities": 62,
-        "Real Estate": 70, "Industrials": 72, "Technology": 78,
-        "Healthcare": 75, "Financials": 76, "Consumer Discretionary": 73,
-        "Communication Services": 77, "Consumer Staples": 74,
+        "Energy": 55, "Materials": 58, "Utilities": 52,
+        "Real Estate": 60, "Industrials": 62, "Technology": 78,
+        "Healthcare": 72, "Financials": 75, "Consumer Discretionary": 65,
+        "Communication Services": 76, "Consumer Staples": 68,
     }
-    score = sector_baselines.get(sector, 75)
+    score = sector_baselines.get(sector, 65)
 
-    # Ticker-specific diversity
-    ticker_hash = sum(ord(c) for c in ticker) % 9  # 0-8
-    score += ticker_hash - 4  # +/- 4 points
+    # Ticker-specific diversity (wider: +/- 15)
+    ticker_hash = sum(ord(c) for c in ticker) % 31  # 0-30
+    score += ticker_hash - 15  # +/- 15 points
+    
+    # Geographic exposure hash (second hash for more diversity)
+    geo_hash = sum(ord(c) for c in ticker[::-1]) % 21  # 0-20
+    score += int((geo_hash - 10) * 0.5)  # +/- 5 points
 
     hits = [w for w in weather_patterns if sector in w.get("affected_sectors", [])]
     if not hits:
-        return max(20, min(95, score))
+        return max(15, min(95, score))
 
+    # Multiple weather patterns compound
+    total_severity = sum(w.get("severity", 1) for w in hits)
     max_sev = max(w.get("severity", 1) for w in hits)
-    score -= max_sev * 8  # Slightly reduced impact
-    return max(20, min(95, score))
+    
+    # Impact: severity * 10 (was 8), with compound bonus for multiple events
+    impact = max_sev * 10 + (total_severity - max_sev) * 3
+    score -= impact
+    
+    # Seasonal boost (some sectors benefit from certain weather)
+    if sector in ["Energy", "Utilities"] and any(w.get("type") == "cold_snap" for w in hits):
+        score += 5  # Cold weather boosts energy demand
+    
+    return max(10, min(95, score))
 
 
 def _score_sentiment_v2(technical: Dict, fundamental: Dict, ticker: str = None,

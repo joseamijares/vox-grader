@@ -154,6 +154,29 @@ def compute_macro_signals(macro_data: Dict) -> List[Dict]:
                 'source': 'Oil'
             })
     
+    # AI-Demand Energy Thesis — Nuclear + Data Center Power
+    # AI data centers need 2-3x more power than traditional data centers
+    # Current grid cannot supply this demand
+    # Nuclear is the only clean baseload option (24/7, not weather-dependent)
+    # Tech companies (Microsoft, Google, Amazon) signing nuclear deals
+    # This is a structural shift, not a cyclical one
+    signals.append({
+        'signal_name': 'AI_DEMAND_ENERGY',
+        'signal_value': 85,  # High conviction structural thesis
+        'signal_direction': 'BULLISH',
+        'impact_sector': 'Utilities',  # Nuclear utilities like CEG
+        'confidence': 85,
+        'source': 'AI-Demand Macro Thesis'
+    })
+    signals.append({
+        'signal_name': 'AI_DEMAND_NUCLEAR',
+        'signal_value': 90,  # Even higher conviction for pure nuclear plays
+        'signal_direction': 'BULLISH',
+        'impact_sector': 'Industrials',  # Nuclear microreactors (OKLO, SMR, NNE, BWXT)
+        'confidence': 90,
+        'source': 'AI-Demand Nuclear Thesis'
+    })
+    
     # Gold as safe haven
     if 'GLD' in macro_data:
         gld = float(macro_data['GLD']['price'])

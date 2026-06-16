@@ -231,6 +231,10 @@ def save_vox_grade(record: dict):
         elif isinstance(value, (list, tuple)):
             record[key] = [v.item() if hasattr(v, 'item') else v for v in value]
     
+    # Truncate ticker to 10 chars to prevent DB errors
+    if record.get('ticker'):
+        record['ticker'] = str(record['ticker'])[:10]
+    
     sql = """
     INSERT INTO vox_grades (
         ticker, name, vox_grade, previous_grade, action, current_price, stop_loss,

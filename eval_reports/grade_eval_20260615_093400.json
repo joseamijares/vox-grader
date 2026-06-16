@@ -1,0 +1,13 @@
+{
+  "distribution": {
+    "count": 50,
+    "mean": 59.26,
+    "std": 3.84,
+    "min": 52,
+    "max": 67,
+    "median": 59,
+    "unique_values": 16,
+    "clustering_risk": true
+  },
+  "timestamp": "2026-06-15T09:34:00.468089"
+}

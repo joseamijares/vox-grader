@@ -412,24 +412,26 @@ def _score_weather_v2(ticker: str, sector: str, weather_patterns: List[Dict]) ->
 
 
 def _score_sentiment_v2(technical: Dict, fundamental: Dict, ticker: str = None,
-                        use_real_sentiment: bool = True) -> int:
-    """Sentiment score — uses real news sentiment from Alpha Vantage if available,
-    falls back to synthetic proxy (momentum + volume + relative strength).
+                        use_real_sentiment: bool = False) -> int:
+    """Sentiment score — synthetic proxy (momentum + volume + relative strength).
+    
+    NOTE: Real Alpha Vantage sentiment is DISABLED by default because API keys
+    are exhausted. Set use_real_sentiment=True only if you have valid API keys.
     
     Args:
         technical: Technical analysis results dict
         fundamental: Fundamental analysis results dict  
-        ticker: Stock ticker symbol (required for real sentiment fetch)
+        ticker: Stock ticker symbol (not used unless real sentiment enabled)
         use_real_sentiment: Whether to attempt Alpha Vantage news sentiment
     
     Returns:
         int: 0-100 sentiment score
     """
-    # Try real sentiment first
+    # Try real sentiment first (only if explicitly enabled and keys available)
     if use_real_sentiment and ticker:
         try:
             from layers.sentiment import score_sentiment_for_vox
-            real_score = score_sentiment_for_vox(ticker, fallback_to_synthetic=False)
+            real_score = score_sentiment_for_vox(ticker, use_real_sentiment=True)
             if real_score != 50:  # 50 means no data or fallback
                 return real_score
         except Exception:

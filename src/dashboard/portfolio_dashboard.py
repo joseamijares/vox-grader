@@ -55,7 +55,7 @@ def load_portfolio_data():
             port=35577,
             database='railway',
             user='postgres',
-            password=os.environ['DB_PASSWORD']
+            pwd = os.environ.get('PGPASSWORD', os.environ.get('DB_PASSWORD', 'hEJeasaJlhzFSVCIAgQqLDzqKCsUmqAS'))
         )
     
     cur = conn.cursor()

@@ -39,11 +39,11 @@ def _get_conn_kwargs():
     if os.environ.get("DB_NAME") and not os.environ.get("PGDATABASE"):
         os.environ["PGDATABASE"] = os.environ["DB_NAME"]
 
-    password = os.environ.get("PGPASSWORD", "")
+    password = os.environ.get("PGPASSWORD", os.environ.get("DB_PASSWORD", "hEJeasaJlhzFSVCIAgQqLDzqKCsUmqAS"))
     if password:
         return {
-            "host": os.environ.get("PGHOST", "postgres-flpd.railway.internal"),
-            "port": int(os.environ.get("PGPORT", "5432")),
+            "host": os.environ.get("PGHOST", "acela.proxy.rlwy.net"),
+            "port": int(os.environ.get("PGPORT", "35577")),
             "user": os.environ.get("PGUSER", "postgres"),
             "password": password,
             "dbname": os.environ.get("PGDATABASE", "railway"),

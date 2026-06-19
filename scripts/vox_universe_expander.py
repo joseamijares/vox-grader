@@ -45,44 +45,84 @@ def connect():
 THEMATIC_UNIVERSES = {
     "quantum_computing": [
         "IONQ", "RGTI", "QBTS", "ARQQ", "QUBT", "QSIM", "QMCO", "QBIT",
-        "IBM", "GOOGL", "MSFT", "AMZN", "NVDA", "HON"
+        "IBM", "GOOGL", "MSFT", "AMZN", "NVDA", "HON", "ALTM", "FORM",
+        "ACN", "T", "VZ", "TMUS", "ERIC", "NOK", "INTC", "QCOM", "TXN"
     ],
     "nuclear_energy": [
         "OKLO", "SMR", "CEG", "BWXT", "NNE", "CCJ", "LEU", "URG", "UEC",
-        "DNN", "LTBR", "TLN", "BE", "FLR", "MTZ", "JEC", "PWR"
+        "DNN", "LTBR", "TLN", "BE", "FLR", "MTZ", "JEC", "PWR", "NEE",
+        "SO", "DUK", "AEP", "EXC", "XEL", "WEC", "PEG", "ED", "ETR",
+        "FE", "AEE", "CNP", "CMS", "ATO", "NI", "SWX", "ORA", "GPRE",
+        "BEP", "BEPC", "NEP", "CWEN", "AY", "HASI", "RNW", "NOVA"
     ],
     "hydrogen": [
         "PLUG", "BE", "FCEL", "BLDP", "CMI", "LIN", "APD", "NEL", "ITM",
-        "PCELL", "HDRO", "ICLN", "PBW", "QCLN"
+        "PCELL", "HDRO", "ICLN", "PBW", "QCLN", "HYDR", "HYSR", "GWH",
+        "EOSE", "SPWR", "RUN", "ENPH", "SEDG", "ARRY", "SHLS", "NOVA",
+        "CSIQ", "JKS", "DQ", "SOL", "MAXN", "RENEW", "GPRE", "MTZ"
     ],
     "em_fintech": [
         "NU", "MELI", "STNE", "PAGS", "DLO", "AFRM", "SOFI", "HOOD", "SQ",
-        "PYPL", "UPST", "LMND", "ROOT", "RENT", "AFRM"
+        "PYPL", "UPST", "LMND", "ROOT", "RENT", "AFRM", "GLBE", "BILL",
+        "GPN", "FIS", "FISV", "GDOT", "WEX", "EVTC", "PAYO", "FOUR",
+        "TOST", "LSPD", "OPEN", "OPFI", "ENVA", "CURO", "EZPW", "FCFS",
+        "PRG", "SC", "ALLY", "COF", "DFS", "SYF", "AXP", "MA", "V",
+        "WPM", "FUTU", "TIGR", "FRHC", "ATFX", "XP", "CINT", "EBANX"
     ],
     "space": [
         "RKLB", "ASTS", "SPCE", "LUNR", "REDW", "VORB", "AJRD", "MAXR",
-        "IRDM", "LMT", "BA", "RTX", "NOC", "GD"
+        "IRDM", "LMT", "BA", "RTX", "NOC", "GD", "HII", "TDG", "HEI",
+        "CW", "KBR", "SAIC", "HRLY", "KVYO", "MRCY", "OSIS", "ATRO",
+        "ESP", "KAMN", "AIR", "TATT", "RADA", "DSS", "BWX", "KTOS",
+        "FLIR", "COBH", "TRMB", "GILT", "VSAT", "SATS", "DISH", "GOGO"
     ],
     "ai_infrastructure": [
         "NVDA", "AMD", "TSM", "AVGO", "MRVL", "MPWR", "LRCX", "AMAT", "KLAC",
         "SNPS", "CDNS", "ANSS", "FTNT", "CRWD", "NET", "DDOG", "S", "PLTR",
-        "AI", "ESTC", "DT", "FSLY", "CFLT", "SNOW", "MDB", "DAVA"
+        "AI", "ESTC", "DT", "FSLY", "CFLT", "SNOW", "MDB", "DAVA", "SMCI",
+        "DELL", "HPE", "INTC", "MU", "STX", "WDC", "NTAP", "PSTG", "BOX",
+        "DOCN", "VEEV", "NOW", "WDAY", "TEAM", "ATLASSIAN", "ZOOM", "RING",
+        "TWLO", "BILL", "HCP", "RPD", "TENB", "QLYS", "RPD", "CYBR", "ZS",
+        "PANW", "CHKP", "FTNT", "SPLK", "SUMO", "BIG", "U", "RBLX", "META",
+        "GOOGL", "MSFT", "AMZN", "AAPL", "ORCL", "SAP", "ADBE", "INTU",
+        "CRM", "HUBS", "ZEN", "ASAN", "MONDAY", "SMAR", "WORK", "SLACK"
     ],
     "biotech_gene": [
         "CRSP", "EDIT", "NTLA", "BEAM", "VRTX", "SRPT", "BMRN", "IONS",
-        "RNA", "ARWR", "PRVB", "KROS", "DNA", "TWST", "QSI", "VERV"
+        "RNA", "ARWR", "PRVB", "KROS", "DNA", "TWST", "QSI", "VERV",
+        "BLUE", "FATE", "SGMO", "NVTA", "PACB", "CDNA", "GH", "EXAS",
+        "NTRA", "MYGN", "GEN", "ILMN", "TXG", "BEAM", "INTellia", "CAR-T",
+        "KPTI", "ALNY", "ARVN", "BPMC", "DCPH", "EPZM", "FOLD", "HALO",
+        "IOVA", "MGNX", "NKTR", "ONCT", "PTCT", "RCKT", "SANA", "TCRR",
+        "TGTX", "ZYME", "ABBV", "BIIB", "GILD", "REGN", "AMGN", "LLY",
+        "PFE", "MRK", "JNJ", "AZN", "NVO", "RPRX", "INCY", "BNTX",
+        "MRNA", "NVAX", "VXRT", "INO", "ALT", "GOVX", "HGEN", "DVAX"
     ],
     "robotics_automation": [
         "ISRG", "TER", "ZBRA", "OMCL", "CGNX", "RBR", "ABB", "FAN",
-        "ROBT", "BOTZ", "ARKQ"
+        "ROBT", "BOTZ", "ARKQ", "KUKA", "YASK", "FANUC", "SIEMENS",
+        "KUKAF", "OMRON", "KEYENCE", "SMC", "THK", "NTN", "HDNG", "KWR",
+        "RBC", "ROLL", "HEICO", "TDG", "CW", "MOG", "ATRO", "KAMN",
+        "HOLI", "DHR", "TMO", "A", "BRKR", "WAT", "MTD", "PEN", "RGEN",
+        " BIO", "TTEC", "SYK", "MDT", "ZBH", "STE", "MASI", "PODD"
     ],
     "crypto_blockchain": [
         "COIN", "MSTR", "HOOD", "BITF", "MARA", "RIOT", "CLSK", "CORZ",
-        "WULF", "BTBT", "IREN", "HIVE", "ARBK", "GLXY"
+        "WULF", "BTBT", "IREN", "HIVE", "ARBK", "GLXY", "CAN", "EBON",
+        "SOS", "NCTY", "MOGO", "BTCS", "RIOT", "HUT", "DMG", "DGHI",
+        "BITF", "ARBK", "GLXY", "VYGR", "SDIG", "GREE", "SBLK", "STRR",
+        "APLD", "SLNH", "MIGI", "CIFR", "BITF", "WULF", "RIOT", "MARA",
+        "BTBT", "CLSK", "CORZ", "HUT", "IREN", "HIVE", "ARBK", "GLXY",
+        "COIN", "MSTR", "HOOD", "SQ", "PYPL", "AFRM", "SOFI", "UPST"
     ],
     "ev_battery": [
         "TSLA", "RIVN", "LCID", "NIO", "XPEV", "LI", "BYDDF", "VWAGY",
-        "QS", "SLDP", "ENOV", "ALB", "SQM", "LTHM", "PLL", "MP"
+        "QS", "SLDP", "ENOV", "ALB", "SQM", "LTHM", "PLL", "MP", "FSR",
+        "GOEV", "CANOO", "ARVL", "ELMS", "MULN", "REE", "AYRO", "KNDI",
+        "GP", "NKLA", "HYLN", "XL", "BLNK", "CHPT", "EVGO", "BEEM",
+        "SPWR", "RUN", "ENPH", "SEDG", "ARRY", "SHLS", "NOVA", "CSIQ",
+        "JKS", "DQ", "SOL", "MAXN", "FREY", "AMPS", "STEM", "EOSE",
+        "GWH", "FLNC", "NRGV", "ECVT", "VLTA", "EVA", "PCT", "ABAT"
     ]
 }
 
@@ -91,10 +131,88 @@ TRENDING_CANDIDATES = [
     "APP", "VST", "COHR", "CELH", "SMCI", "SOUN", "BABA", "JD", "PDD",
     "SHOP", "SNOW", "NET", "CRWD", "ZS", "PANW", "CYBR", "S", "OKTA",
     "DDOG", "MDB", "CFLT", "PLTR", "AI", "PATH", "BIG", "U", "RBLX",
-    "META", "SNAP", "PINS", "SPOT", "Roku", "ZM", "DOCU", "SQ", "AFRM",
+    "META", "SNAP", "PINS", "SPOT", "ROKU", "ZM", "DOCU", "SQ", "AFRM",
     "SOFI", "HOOD", "UPST", "LMND", "ROOT", "RENT", "W", "ETSY", "CHWY",
     "PTON", "DASH", "ABNB", "UBER", "LYFT", "GRAB", "DIDI", "SE", "MELI",
-    "NU", "STNE", "PAGS", "DLO", "GLBE", "FVRR", "TASK", "UPWK", "GTLB"
+    "NU", "STNE", "PAGS", "DLO", "GLBE", "FVRR", "TASK", "UPWK", "GTLB",
+    # Additional aggressive growth tickers
+    "APLD", "APPS", "ARM", "ASAN", "ASTS", "AVDX", "AVPT", "AXON",
+    "BE", "BEAM", "BEEM", "BILL", "BMBL", "BRZE", "BTBT", "BTDR",
+    "CART", "CFLT", "CGNX", "CLSK", "CNVA", "COMM", "CORZ", "CPNG",
+    "CRDO", "CRSP", "CSPR", "CTKB", "DAVA", "DCT", "DGHI", "DNA",
+    "DOCS", "DOMA", "DRCT", "DT", "DUOL", "DV", "ENOV", "ENVX",
+    "EOSE", "EVGO", "EVLV", "EXAI", "FIGS", "FLNC", "FOUR", "FRSH",
+    "FSLY", "FTCI", "FVRR", "GCT", "GDRX", "GFS", "GH", "GLOB",
+    "GOCO", "GOEV", "GPRO", "GRAB", "GREE", "GTLB", "HCP", "HIMS",
+    "HIVE", "HOOD", "HUT", "IAS", "IBET", "IMMR", "INSM", "IOVA",
+    "IREN", "JOBY", "KIND", "KVYO", "LAW", "LFST", "LI", "LIDR",
+    "LILM", "LMND", "LPSN", "LUNR", "LYFT", "MARA", "MAXN", "MDB",
+    "MELI", "MIGI", "MNDY", "MQ", "MRVI", "MSTR", "MTTR", "NCNO",
+    "NEGG", "NNE", "NOVA", "NTRA", "NTWK", "NVTA", "OLO", "ONON",
+    "OPEN", "OPFI", "OPRA", "OSCR", "OWLT", "PAYO", "PCT", "PD",
+    "PENN", "PERI", "PHR", "PL", "PLTK", "PRCH", "PRCT", "PRVA",
+    "PSFE", "PTON", "PUBM", "PWP", "QBTS", "QS", "RBLX", "RDW",
+    "RELY", "RENT", "RGTI", "RKLB", "ROOT", "RPD", "RVMD", "RXRX",
+    "S", "SAI", "SANA", "SATS", "SDGR", "SEAT", "SEMR", "SENS",
+    "SHLS", "SKIL", "SLDP", "SLNH", "SMR", "SOUN", "SPCE", "SPHR",
+    "SPOT", "SRAD", "STEM", "STNE", "STRC", "SUMO", "SWIM", "SWTX",
+    "SYRE", "TASK", "TBLA", "TENB", "TGLS", "TIRX", "TOST", "TPIC",
+    "TRVG", "TW", "TWKS", "TWLO", "U", "UPBD", "UPST", "VAXX",
+    "VCSA", "VECO", "VEL", "VFS", "VLD", "VNET", "VRAR", "VRM",
+    "VST", "VXRT", "W", "WALD", "WBX", "WEAV", "WKME", "WULF",
+    "XPEV", "YALA", "YEXT", "YOU", "ZETA", "ZIP", "ZUO", "ZYME",
+    "ZUO", "ZWS", "AFRM", "ALKT", "ALTR", "ALVO", "AMPL", "AMSC",
+    "ANNX", "APGE", "APLT", "APPH", "APTV", "ARBE", "ARHS", "ARLO",
+    "ARRY", "ASLE", "ATAT", "ATEN", "AUR", "AUST", "AVAH", "AVAV",
+    "AWI", "BAND", "BARK", "BBAI", "BCSF", "BDSX", "BFLY", "BHIL",
+    "BIRD", "BL", "BLDE", "BLFS", "BLND", "BLNK", "BMBL", "BNZI",
+    "BOWL", "BRCC", "BRLT", "BRZE", "BTSG", "BVS", "BYND", "CALX",
+    "CARS", "CENX", "CERT", "CHPT", "CIFR", "CLAR", "CLBT", "CLFD",
+    "CLSK", "CMBM", "CMPO", "CMTL", "CNXC", "COFS", "COHR", "COMP",
+    "COUR", "CPRX", "CRCT", "CREX", "CRNC", "CRNX", "CRSR", "CSTL",
+    "CTLP", "CVNA", "CWAN", "CXM", "CYBN", "CYRX", "DCTH", "DDOG",
+    "DLO", "DMAC", "DMTK", "DNMR", "DOMO", "DOYU", "DRS", "DSP",
+    "DTC", "DYN", "EHTH", "ELWS", "EMBC", "ENFN", "ENLT", "ENVX",
+    "EOSE", "EPRX", "EQRX", "ERAS", "ESMT", "ETNB", "EVBG", "EVCM",
+    "EVGO", "EVLV", "EVTL", "EXFY", "EXPI", "FATH", "FBYD", "FICO",
+    "FLNC", "FLYW", "FORG", "FORM", "FRGE", "FRSH", "FSLY", "FTCH",
+    "FUBO", "FVRR", "GDRX", "GFS", "GGR", "GIPR", "GLBE", "GNLX",
+    "GOCO", "GOEV", "GPRO", "GRAB", "GREE", "GTLB", "HCP", "HIMS",
+    "HPK", "HROW", "HRTX", "HUBS", "HUT", "IAS", "IBET", "ICAD",
+    "IDYA", "IGMS", "IMMR", "IMNM", "IMRX", "IMVT", "INAB", "INDI",
+    "INFA", "INMD", "INOD", "INSM", "IOBT", "IONQ", "IOVA", "IPSC",
+    "IRBT", "IREN", "ISPC", "ITCI", "JAMF", "JOBY", "KIND", "KNSA",
+    "KOD", "KOPN", "KPLT", "KRMD", "KSCP", "KVYO", "KYMR", "LAW",
+    "LFST", "LGVN", "LIDR", "LILM", "LITE", "LMAT", "LNTH", "LPRO",
+    "LPSN", "LQDA", "LRE", "LSPD", "LTRN", "LTRX", "LUCD", "LUNG",
+    "LUNR", "LVLU", "LYEL", "LYFT", "LZ", "MAPS", "MASS", "MATH",
+    "MAXN", "MBLY", "MCFT", "MDB", "MDGL", "MDWT", "ME", "MEC",
+    "MELI", "MESA", "MGNX", "MGNI", "MGY", "MIGI", "MIND", "MIR",
+    "MKFG", "MNDY", "MNKD", "MOD", "MODV", "MQ", "MRCY", "MRVI",
+    "MSTR", "MTTR", "MULN", "MVIS", "MX", "NCNO", "NEGG", "NERV",
+    "NET", "NEXT", "NNE", "NOVA", "NRDY", "NTRA", "NTWK", "NUTX",
+    "NVAX", "NVTS", "NVTA", "NXGL", "OABI", "OCEA", "OCS", "OLED",
+    "OLO", "OMGA", "ONON", "ONTF", "OPEN", "OPFI", "OPRA", "OPXS",
+    "ORIC", "OSCR", "OSW", "OTLY", "OWLT", "OUST", "PAYO", "PAY",
+    "PCT", "PD", "PENN", "PERI", "PETS", "PHR", "PL", "PLCE",
+    "PLTK", "PLUG", "PNTG", "POWW", "PRCH", "PRCT", "PRDS", "PRIM",
+    "PRME", "PRO", "PRVA", "PSFE", "PTON", "PUBM", "PWP", "QBTS",
+    "QD", "QSI", "QS", "RBLX", "RDW", "REAL", "RELY", "RENT",
+    "REPL", "RETA", "RGTI", "RKLB", "RMBL", "ROOT", "RPD", "RPID",
+    "RPRX", "RXT", "RXRX", "S", "SAI", "SANA", "SATS", "SB",
+    "SBXC", "SCPH", "SCWX", "SDGR", "SEAT", "SEMR", "SENS", "SEV",
+    "SGHT", "SHLS", "SHO", "SHOP", "SKIL", "SKIN", "SLAB", "SLDP",
+    "SLGC", "SLNH", "SM", "SMAR", "SMCI", "SMMT", "SMR", "SMRT",
+    "SMTC", "SMTI", "SNAP", "SNCE", "SND", "SOUN", "SPCE", "SPHR",
+    "SPOT", "SRAD", "SRDX", "SRRK", "STEM", "STEP", "STNE", "STRC",
+    "SUMO", "SWAV", "SWIM", "SWTX", "SYRE", "TALK", "TALO", "TASK",
+    "TBLA", "TENB", "TGLS", "TIRX", "TKLF", "TKNO", "TOST", "TPIC",
+    "TRVG", "TSAT", "TTD", "TW", "TWKS", "TWLO", "U", "UBER",
+    "UPBD", "UPST", "VAXX", "VCSA", "VECO", "VEL", "VERV", "VFS",
+    "VHC", "VIR", "VLD", "VNET", "VRAR", "VRM", "VST", "VTEX",
+    "VXRT", "W", "WALD", "WBX", "WEAV", "WKME", "WOLF", "WULF",
+    "XAIR", "XELA", "XENE", "XPEV", "YALA", "YEXT", "YOU", "YQ",
+    "ZETA", "ZIP", "ZLAB", "ZUO", "ZWS", "ZYME", "ZYXI"
 ]
 
 def init_tier_system():
